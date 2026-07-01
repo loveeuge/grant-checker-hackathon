@@ -3,6 +3,7 @@ const state = {
   keyConfigured: false,
   demoMode: false,
   lastError: "",
+  announcements: [],
 };
 
 const localSample = {
@@ -23,6 +24,43 @@ const localSample = {
 MVP 화면 캡처
 고객 인터뷰 요약본`,
 };
+
+const localAnnouncementSamples = [
+  {
+    id: "sample-kstartup-officehour",
+    source: "kstartup",
+    sourceLabel: "K-Startup",
+    title: "[무료] VC 투자 및 오픈이노베이션 1:1 멘토링, 7월 dcamp officehour",
+    organization: "은행권청년창업재단",
+    category: "멘토링ㆍ컨설팅ㆍ교육",
+    region: "전국",
+    target: "일반기업, 1인 창조기업",
+    startupAge: "예비창업자, 1년미만, 3년미만, 7년미만",
+    period: "2026-06-25 ~ 2026-07-09",
+    daysLeft: 8,
+    status: "모집중",
+    url: "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn=178340",
+    summary:
+      "스타트업이 VC, 오픈이노베이션 파트너와 1:1로 만나 투자유치와 사업협력 가능성을 논의하는 멘토링 프로그램입니다.",
+  },
+  {
+    id: "sample-bizinfo-scaleup",
+    source: "bizinfo",
+    sourceLabel: "기업마당",
+    title: "중소기업 AI 전환 바우처 지원사업",
+    organization: "중소벤처기업부",
+    category: "기술ㆍ디지털 전환",
+    region: "전국",
+    target: "중소기업, 창업기업",
+    startupAge: "",
+    period: "2026-07-01 ~ 2026-07-31",
+    daysLeft: 30,
+    status: "확인 필요",
+    url: "https://www.bizinfo.go.kr/",
+    summary:
+      "AI 솔루션 도입과 업무 자동화 실증을 준비하는 기업을 대상으로 컨설팅과 바우처 비용을 지원하는 가상 샘플 공고입니다.",
+  },
+];
 
 const els = {};
 
@@ -49,6 +87,15 @@ function cacheElements() {
     "save-key-button",
     "admin-form-note",
     "notice-banner",
+    "announcement-search-form",
+    "announcement-keyword-input",
+    "announcement-source-select",
+    "announcement-region-select",
+    "announcement-category-select",
+    "announcement-target-select",
+    "announcement-search-button",
+    "announcement-summary",
+    "announcement-results",
     "sample-button",
     "analyze-button",
     "notice-file-input",
@@ -77,6 +124,8 @@ function cacheElements() {
 function bindEvents() {
   els.refreshStatusButton?.addEventListener("click", checkAdminStatus);
   els.adminKeyForm?.addEventListener("submit", saveAdminKey);
+  els.announcementSearchForm?.addEventListener("submit", searchAnnouncements);
+  els.announcementResults?.addEventListener("click", handleAnnouncementAction);
   els.sampleButton?.addEventListener("click", fillSample);
   els.analyzeButton?.addEventListener("click", analyzeInputs);
   els.noticeFileButton?.addEventListener("click", () => els.noticeFileInput.click());
@@ -194,6 +243,164 @@ async function fillSample() {
   } finally {
     setButtonLoading(els.sampleButton, false);
     renderIcons();
+  }
+}
+
+async function searchAnnouncements(event) {
+  event.preventDefault();
+
+  const params = new URLSearchParams({
+    keyword: els.announcementKeywordInput.value.trim(),
+    source: els.announcementSourceSelect.value,
+    region: els.announcementRegionSelect.value,
+    category: els.announcementCategorySelect.value,
+    target: els.announcementTargetSelect.value,
+    recruitingOnly: "true",
+    limit: "8",
+  });
+
+  setButtonLoading(els.announcementSearchButton, true);
+  els.announcementSummary.textContent = "공고를 검색하는 중입니다.";
+  renderAnnouncementLoading();
+
+  try {
+    const data = await requestJson(`/api/announcements/search?${params.toString()}`);
+    state.announcements = Array.isArray(data.results) ? data.results : [];
+    renderAnnouncementResults(data, false);
+    showBanner("info", `${state.announcements.length}개 공고를 찾았습니다. 공고를 선택하면 검토 자료에 자동 입력됩니다.`);
+  } catch (error) {
+    const fallback = buildLocalAnnouncementSearch(params);
+    state.announcements = fallback.results;
+    renderAnnouncementResults(fallback, true);
+    showBanner("warning", `공고 검색 API를 사용할 수 없어 샘플 공고를 표시했습니다. ${cleanError(error)}`);
+  } finally {
+    setButtonLoading(els.announcementSearchButton, false);
+    renderIcons();
+  }
+}
+
+function buildLocalAnnouncementSearch(params) {
+  const keyword = String(params.get("keyword") || "").toLowerCase();
+  const source = params.get("source") || "all";
+  const region = params.get("region") || "";
+  const category = params.get("category") || "";
+  const target = params.get("target") || "";
+
+  const results = localAnnouncementSamples
+    .filter((item) => source === "all" || item.source === source)
+    .filter((item) => !keyword || announcementSearchText(item).includes(keyword))
+    .filter((item) => !region || announcementSearchText(item).includes(region.toLowerCase()) || item.region.includes("전국"))
+    .filter((item) => !category || announcementSearchText(item).includes(category.toLowerCase()))
+    .filter((item) => !target || announcementSearchText(item).includes(target.toLowerCase()))
+    .map((item) => ({
+      ...item,
+      noticeText: announcementToNoticeText(item),
+    }));
+
+  return {
+    ok: true,
+    count: results.length,
+    results,
+    sources: [
+      { source: "local", label: "샘플", status: "fallback", message: "샘플 공고를 표시했습니다." },
+    ],
+  };
+}
+
+function renderAnnouncementLoading() {
+  els.announcementResults.innerHTML = `
+    <div class="announcement-empty">
+      <i data-lucide="loader-circle" aria-hidden="true"></i>
+      <span>검색 중입니다.</span>
+    </div>
+  `;
+  renderIcons();
+}
+
+function renderAnnouncementResults(data, isFallback) {
+  const results = Array.isArray(data.results) ? data.results : [];
+  const sourceText = summarizeAnnouncementSources(data.sources || []);
+  els.announcementSummary.textContent = isFallback
+    ? `샘플 공고 ${results.length}개를 표시했습니다. ${sourceText}`
+    : `검색 결과 ${results.length}개. ${sourceText}`;
+
+  if (!results.length) {
+    els.announcementResults.innerHTML = `
+      <div class="announcement-empty">
+        <i data-lucide="search-x" aria-hidden="true"></i>
+        <span>조건에 맞는 공고가 없습니다.</span>
+      </div>
+    `;
+    renderIcons();
+    return;
+  }
+
+  els.announcementResults.innerHTML = results.map(renderAnnouncementCard).join("");
+  renderIcons();
+}
+
+function renderAnnouncementCard(item) {
+  const daysLabel = formatDaysLeft(item.daysLeft);
+  const sourceClass = item.source === "bizinfo" ? "is-bizinfo" : "is-kstartup";
+  const url = escapeAttribute(item.url || "");
+
+  return `
+    <article class="announcement-card">
+      <div class="announcement-card-head">
+        <span class="source-chip ${sourceClass}">${escapeHtml(item.sourceLabel || item.source || "공고")}</span>
+        <span class="deadline-chip">${escapeHtml(daysLabel)}</span>
+      </div>
+      <h3>${escapeHtml(item.title || "제목 없음")}</h3>
+      <dl class="announcement-meta">
+        ${renderMetaItem("기관", item.organization)}
+        ${renderMetaItem("기간", item.period)}
+        ${renderMetaItem("분야", item.category)}
+        ${renderMetaItem("지역", item.region)}
+        ${renderMetaItem("대상", item.target)}
+      </dl>
+      <p>${escapeHtml(truncateInline(item.summary || "공고 요약을 확인하세요.", 160))}</p>
+      <div class="announcement-actions">
+        <button class="button primary" type="button" data-announcement-action="use" data-announcement-id="${escapeAttribute(item.id)}">
+          <i data-lucide="file-plus-2" aria-hidden="true"></i>
+          이 공고로 분석하기
+        </button>
+        ${
+          url
+            ? `<a class="button ghost" href="${url}" target="_blank" rel="noreferrer">
+                <i data-lucide="external-link" aria-hidden="true"></i>
+                원문 보기
+              </a>`
+            : ""
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderMetaItem(label, value) {
+  if (!value) return "";
+  return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function handleAnnouncementAction(event) {
+  const button = event.target.closest("[data-announcement-action='use']");
+  if (!button) return;
+
+  const item = state.announcements.find((announcement) => announcement.id === button.dataset.announcementId);
+  if (!item) return;
+
+  applyAnnouncementToNotice(item);
+}
+
+function applyAnnouncementToNotice(item) {
+  const text = String(item.noticeText || announcementToNoticeText(item)).trim();
+  els.grantNotice.value = text;
+  els.noticeImportNote.textContent = `${item.sourceLabel || "검색"} 공고를 공고문 칸에 입력했습니다.`;
+  showBanner("info", `${item.title} 공고를 검토 자료에 넣었습니다. 팀 소개와 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+
+  const values = getInputs();
+  if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
+    analyzeInputs();
   }
 }
 
@@ -1119,6 +1326,68 @@ function countByStatus(rows, status) {
 function containsAny(text, words) {
   const lower = String(text || "").toLowerCase();
   return words.some((word) => lower.includes(String(word).toLowerCase()));
+}
+
+function summarizeAnnouncementSources(sources) {
+  if (!Array.isArray(sources) || !sources.length) return "";
+  return sources
+    .map((source) => {
+      const label = source.label || source.source || "출처";
+      if (source.status === "skipped") return `${label}: 키 필요`;
+      if (source.status === "fallback") return `${label}: 샘플`;
+      if (source.ok) return `${label}: ${source.count || 0}건 조회`;
+      return `${label}: 확인 필요`;
+    })
+    .join(" · ");
+}
+
+function formatDaysLeft(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "마감 확인";
+  const days = Number(value);
+  if (days < 0) return "마감 가능";
+  if (days === 0) return "오늘 마감";
+  return `D-${days}`;
+}
+
+function announcementToNoticeText(item) {
+  return [
+    `[공고 출처] ${item.sourceLabel || item.source || "공고 검색"}`,
+    `공고명: ${item.title || ""}`,
+    item.organization ? `기관: ${item.organization}` : "",
+    item.category ? `지원분야: ${item.category}` : "",
+    item.region ? `지원지역: ${item.region}` : "",
+    item.target ? `신청대상: ${item.target}` : "",
+    item.startupAge ? `창업기간: ${item.startupAge}` : "",
+    item.period ? `접수기간: ${item.period}` : "",
+    item.status ? `모집상태: ${item.status}` : "",
+    item.summary ? `공고내용: ${item.summary}` : "",
+    item.url ? `상세 URL: ${item.url}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function announcementSearchText(item) {
+  return [
+    item.title,
+    item.organization,
+    item.category,
+    item.region,
+    item.target,
+    item.startupAge,
+    item.summary,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function truncateInline(value, maxLength) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
 }
 
 function cleanError(error) {

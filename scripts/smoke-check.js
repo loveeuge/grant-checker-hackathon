@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  buildAnnouncementNoticeText,
+  normalizeKstartupAnnouncement,
+  searchAnnouncements
+} from '../src/announcement-search.js';
 import { analyzeApplication } from '../src/analyzer.js';
 import {
   extractNoticeTextFromUpload,
@@ -85,5 +90,26 @@ assert.ok(importedPreparedDocuments.text.includes('business-plan.txt'));
 assert.ok(importedPreparedDocuments.text.includes('registration-photo.jpg'));
 
 await assert.rejects(() => extractNoticeTextFromUrl('http://localhost:5173'));
+
+const normalizedAnnouncement = normalizeKstartupAnnouncement({
+  biz_pbanc_nm: 'AI 스타트업 사업화 지원사업',
+  pbanc_ntrp_nm: '테스트 기관',
+  supt_biz_clsfc: '사업화',
+  supt_regin: '전국',
+  aply_trgt: '예비창업자,일반기업',
+  pbanc_rcpt_bgng_dt: '20260701',
+  pbanc_rcpt_end_dt: '20260731',
+  rcrt_prgs_yn: 'Y',
+  pbanc_ctnt: 'AI 서비스 실증을 지원합니다.',
+  detl_pg_url: 'https://www.k-startup.go.kr/test'
+});
+
+assert.equal(normalizedAnnouncement.source, 'kstartup');
+assert.equal(normalizedAnnouncement.title, 'AI 스타트업 사업화 지원사업');
+assert.ok(buildAnnouncementNoticeText(normalizedAnnouncement).includes('AI 서비스 실증'));
+
+const bizinfoOnly = await searchAnnouncements({ source: 'bizinfo', keyword: 'AI' }, { BIZINFO_API_KEY: '' });
+assert.equal(bizinfoOnly.ok, true);
+assert.equal(bizinfoOnly.sources[0].status, 'skipped');
 
 console.log('Smoke check passed');

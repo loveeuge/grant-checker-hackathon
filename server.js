@@ -5,6 +5,7 @@ import multer from 'multer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeApplication } from './src/analyzer.js';
+import { searchAnnouncements } from './src/announcement-search.js';
 import {
   extractNoticeTextFromUpload,
   extractNoticeTextFromUrl,
@@ -118,6 +119,19 @@ app.get('/api/sample', async (_req, res) => {
   const samplePath = path.join(__dirname, 'data', 'sample.json');
   const sample = JSON.parse(await fs.readFile(samplePath, 'utf8'));
   res.json(normalizeSamplePayload(sample));
+});
+
+app.get('/api/announcements/search', async (req, res) => {
+  try {
+    const result = await searchAnnouncements(req.query);
+    res.json(result);
+  } catch (error) {
+    console.error('[announcements:error]', error?.message || error);
+    res.status(500).json({
+      ok: false,
+      error: '공고 검색 중 오류가 발생했습니다. 검색 조건을 줄이거나 잠시 후 다시 시도해 주세요.'
+    });
+  }
 });
 
 app.post('/api/import/notice/file', singleUpload.single('noticeFile'), async (req, res) => {
