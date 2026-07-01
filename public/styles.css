@@ -674,7 +674,8 @@ h3 {
 }
 
 #notice-file-input,
-#team-file-input {
+#team-file-input,
+#business-registration-file-input {
   position: absolute;
   width: 1px;
   height: 1px;

@@ -153,8 +153,14 @@
                     <i data-lucide="presentation" aria-hidden="true"></i>
                     회사소개서 불러오기
                   </button>
+                  <input id="business-registration-file-input" type="file" accept=".pdf,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,.gif,application/pdf,text/*,image/jpeg,image/png,image/webp,image/gif" />
+                  <button id="business-registration-file-button" class="button ghost" type="button">
+                    <i data-lucide="badge-check" aria-hidden="true"></i>
+                    사업자등록증 불러오기
+                  </button>
                 </div>
                 <p id="team-import-note" class="form-note" role="status">IR, 회사소개서, 팀 소개 파일이나 사진을 불러오면 팀 소개 칸에 자동 입력됩니다. 사진 추출은 API key 등록 후 작동합니다.</p>
+                <p id="business-registration-import-note" class="form-note" role="status">사업자등록증을 넣으면 소재지, 개업일, 업태/종목을 자격요건 판단에 함께 반영합니다.</p>
               </div>
               <textarea id="team-intro" placeholder="예: 서울 소재 예비창업팀으로 AI 문서 자동화 서비스를 준비 중..."></textarea>
             </label>

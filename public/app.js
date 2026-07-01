@@ -9,6 +9,8 @@ const state = {
   eligibilityRequirements: [],
   selectionSignals: [],
   requirementUploads: {},
+  businessRegistrationText: "",
+  businessRegistrationUpload: null,
 };
 
 const localSample = {
@@ -111,6 +113,9 @@ function cacheElements() {
     "team-file-input",
     "team-file-button",
     "team-import-note",
+    "business-registration-file-input",
+    "business-registration-file-button",
+    "business-registration-import-note",
     "requirements-panel",
     "selected-announcement-title",
     "selected-announcement-meta",
@@ -153,6 +158,8 @@ function bindEvents() {
   });
   els.teamFileButton?.addEventListener("click", () => els.teamFileInput.click());
   els.teamFileInput?.addEventListener("change", importTeamFile);
+  els.businessRegistrationFileButton?.addEventListener("click", () => els.businessRegistrationFileInput.click());
+  els.businessRegistrationFileInput?.addEventListener("change", importBusinessRegistrationFile);
   els.teamIntro?.addEventListener("blur", () => {
     if (state.selectedAnnouncement && els.teamIntro.value.trim()) extractRequirementsForCurrent();
   });
@@ -468,6 +475,7 @@ async function extractRequirementsForCurrent() {
       body: JSON.stringify({
         noticeText,
         teamInfo: els.teamIntro.value.trim(),
+        businessRegistration: buildBusinessRegistrationText(),
       }),
     });
 
@@ -725,6 +733,7 @@ async function analyzeInputs() {
         noticeText: values.grantNotice,
         teamInfo: values.teamIntro,
         documentsList: values.preparedDocuments,
+        businessRegistration: values.businessRegistration,
         grantNotice: values.grantNotice,
         teamIntro: values.teamIntro,
         preparedDocuments: values.preparedDocuments,
@@ -882,6 +891,62 @@ function applyImportedTeam(data, label) {
 
   const values = getInputs();
   if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
+    analyzeInputs();
+  }
+}
+
+async function importBusinessRegistrationFile() {
+  const file = els.businessRegistrationFileInput.files?.[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("businessRegistrationFile", file);
+
+  setButtonLoading(els.businessRegistrationFileButton, true);
+  els.businessRegistrationImportNote.textContent = `${file.name}에서 사업자등록증 정보를 추출하는 중입니다.`;
+
+  try {
+    const data = await requestJson("/api/import/business-registration/file", {
+      method: "POST",
+      body: formData,
+    });
+
+    applyImportedBusinessRegistration(data, file.name);
+  } catch (error) {
+    showBanner("error", `사업자등록증 파일을 불러오지 못했습니다. ${cleanError(error)}`);
+    els.businessRegistrationImportNote.textContent = "사진이나 이미지 중심 파일은 로컬 서버의 .env API key 설정 후 JPG, PNG, WEBP, GIF로 첨부해 주세요.";
+  } finally {
+    els.businessRegistrationFileInput.value = "";
+    setButtonLoading(els.businessRegistrationFileButton, false);
+    renderIcons();
+  }
+}
+
+function applyImportedBusinessRegistration(data, label) {
+  const text = String(data.text || "").trim();
+  if (!text) {
+    showBanner("error", "사업자등록증에서 읽을 수 있는 텍스트를 찾지 못했습니다.");
+    return;
+  }
+
+  const source = data.source || {};
+  const sourceLabel = source.kind ? source.kind.toUpperCase() : "파일";
+  const truncatedText = source.truncated ? " 긴 파일은 앞부분만 반영했습니다." : "";
+  state.businessRegistrationText = text;
+  state.businessRegistrationUpload = {
+    label,
+    kind: source.kind || "file",
+    characters: source.characters || text.length,
+    truncated: Boolean(source.truncated),
+  };
+
+  els.businessRegistrationImportNote.textContent = `${sourceLabel} 사업자등록증 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
+  syncPreparedDocumentsFromBoard();
+  showBanner("info", `${label} 사업자등록증을 반영했습니다. 지역, 업력, 업태/종목 판단에 함께 사용합니다.`);
+  if (els.grantNotice.value.trim()) extractRequirementsForCurrent();
+
+  const values = getInputs();
+  if (values.grantNotice && values.teamIntro) {
     analyzeInputs();
   }
 }
@@ -1194,10 +1259,10 @@ function normalizeList(value) {
 }
 
 function buildFallbackAnalysis(values, reason) {
-  const combined = `${values.grantNotice}\n${values.teamIntro}\n${values.preparedDocuments}`;
   const notice = values.grantNotice;
-  const team = values.teamIntro;
+  const team = [values.teamIntro, values.businessRegistration].filter(Boolean).join("\n\n");
   const docs = values.preparedDocuments;
+  const combined = `${notice}\n${team}\n${docs}`;
   const requiredDocs = detectRequiredDocuments(notice);
   const documentRows = requiredDocs.map((name) => {
     const hasDoc = containsAny(docs, docAliases(name));
@@ -1700,15 +1765,16 @@ function hideBanner() {
 
 function getInputs() {
   const manualDocuments = els.preparedDocuments?.value.trim() || "";
+  const businessRegistration = buildBusinessRegistrationText();
   const boardDocuments = buildRequirementBoardText();
-  const preparedDocuments =
-    boardDocuments && !manualDocuments.includes("[필요서류 체크보드]")
-      ? [manualDocuments, boardDocuments].filter(Boolean).join("\n\n")
-      : manualDocuments;
+  const cleanedManualDocuments = stripGeneratedPreparedDocumentSections(manualDocuments);
+  const generatedDocuments = [businessRegistration, boardDocuments].filter(Boolean).join("\n\n");
+  const preparedDocuments = [cleanedManualDocuments, generatedDocuments].filter(Boolean).join("\n\n");
 
   return {
     grantNotice: els.grantNotice.value.trim(),
     teamIntro: els.teamIntro.value.trim(),
+    businessRegistration,
     preparedDocuments,
   };
 }
@@ -1717,6 +1783,11 @@ function setInputs(sample) {
   els.grantNotice.value = sample.grantNotice || "";
   els.teamIntro.value = sample.teamIntro || "";
   if (els.preparedDocuments) els.preparedDocuments.value = sample.preparedDocuments || "";
+  state.businessRegistrationText = "";
+  state.businessRegistrationUpload = null;
+  if (els.businessRegistrationImportNote) {
+    els.businessRegistrationImportNote.textContent = "사업자등록증을 넣으면 소재지, 개업일, 업태/종목을 자격요건 판단에 함께 반영합니다.";
+  }
 }
 
 function pickFirst(source, keys) {
@@ -1744,12 +1815,38 @@ function containsAny(text, words) {
 
 function syncPreparedDocumentsFromBoard() {
   if (!els.preparedDocuments) return;
+  const businessRegistration = buildBusinessRegistrationText();
   const boardText = buildRequirementBoardText();
-  if (!boardText) return;
+  const generatedText = [businessRegistration, boardText].filter(Boolean).join("\n\n");
+  if (!generatedText) return;
 
   const current = els.preparedDocuments.value.trim();
-  const manual = current.replace(/\n*\[필요서류 체크보드][\s\S]*$/m, "").trim();
-  els.preparedDocuments.value = [manual, boardText].filter(Boolean).join("\n\n");
+  const manual = stripGeneratedPreparedDocumentSections(current);
+  els.preparedDocuments.value = [manual, generatedText].filter(Boolean).join("\n\n");
+}
+
+function stripGeneratedPreparedDocumentSections(value) {
+  return String(value || "")
+    .replace(/\n*\[사업자등록증 기본 정보][\s\S]*?(?=\n\n\[필요서류 체크보드]|\n\n\[자격요건 체크]|\n\n\[선정 가능성 신호]|\n*$)/m, "")
+    .replace(/\n*\[필요서류 체크보드][\s\S]*$/m, "")
+    .trim();
+}
+
+function buildBusinessRegistrationText() {
+  const text = String(state.businessRegistrationText || "").trim();
+  if (!text) return "";
+
+  const upload = state.businessRegistrationUpload || {};
+  return [
+    "[사업자등록증 기본 정보]",
+    upload.label ? `파일명: ${upload.label}` : "",
+    upload.characters ? `추출상태: ${upload.kind ? String(upload.kind).toUpperCase() : "파일"} 텍스트 ${Number(upload.characters).toLocaleString("ko-KR")}자 추출` : "",
+    "서류명: 사업자등록증",
+    "활용: 소재지, 개업일, 업태/종목, 사업자 상태를 공고 자격요건과 대조",
+    `추출 내용:\n${indentBlock(text, "  ")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildRequirementBoardText() {

@@ -11,6 +11,7 @@ import { analyzeApplication } from '../src/analyzer.js';
 import {
   extractNoticeTextFromUpload,
   extractNoticeTextFromUrl,
+  extractBusinessRegistrationTextFromUpload,
   extractPreparedDocumentsFromUploads,
   extractTeamTextFromUpload
 } from '../src/notice-importer.js';
@@ -23,13 +24,20 @@ const root = path.join(__dirname, '..');
 const sample = normalizeSamplePayload(JSON.parse(await fs.readFile(path.join(root, 'data', 'sample.json'), 'utf8')));
 const indexHtml = await fs.readFile(path.join(root, 'public', 'index.html'), 'utf8');
 const appJs = await fs.readFile(path.join(root, 'public', 'app.js'), 'utf8');
+const serverJs = await fs.readFile(path.join(root, 'server.js'), 'utf8');
 const envExample = await fs.readFile(path.join(root, '.env.example'), 'utf8');
 
 assert.ok(indexHtml.includes('id="requirements-panel"'));
 assert.ok(indexHtml.includes('id="prepared-documents" hidden'));
+assert.ok(indexHtml.includes('id="business-registration-file-input"'));
+assert.ok(indexHtml.includes('id="business-registration-file-button"'));
+assert.ok(indexHtml.includes('사업자등록증 불러오기'));
 assert.ok(!indexHtml.includes('id="documents-file-button"'));
 assert.ok(!indexHtml.includes('준비서류 첨부'));
 assert.ok(!indexHtml.includes('href="./admin.html"'));
+assert.ok(appJs.includes('"business-registration-file-input"'));
+assert.ok(appJs.includes('businessRegistration: values.businessRegistration'));
+assert.ok(appJs.includes('[사업자등록증 기본 정보]'));
 assert.ok(appJs.includes('필요서류</th>'));
 assert.ok(appJs.includes('왜 필요한가</th>'));
 assert.ok(appJs.includes('오늘 해야 할 일 TOP 3'));
@@ -40,6 +48,8 @@ assert.ok(appJs.includes('강점'));
 assert.ok(appJs.includes('약점'));
 assert.ok(!appJs.includes('선정 확정'));
 assert.ok(!appJs.includes('탈락 확정'));
+assert.ok(serverJs.includes('/api/import/business-registration/file'));
+assert.ok(serverJs.includes('businessRegistration'));
 assert.ok(envExample.includes('OPENAI_MODEL=gpt-5.5-pro'));
 assert.ok(envExample.includes('OPENAI_VISION_MODEL=gpt-5.5-pro'));
 
@@ -86,6 +96,15 @@ const importedTeam = await extractTeamTextFromUpload({
 
 assert.equal(importedTeam.ok, true);
 assert.ok(importedTeam.text.includes('체크메이트 랩스'));
+
+const importedBusinessRegistration = await extractBusinessRegistrationTextFromUpload({
+  buffer: Buffer.from('사업자등록증\n상호: 체크메이트 랩스\n사업장 소재지: 서울특별시 서대문구\n개업연월일: 2026-01-02', 'utf8'),
+  originalname: 'business-registration.txt',
+  mimetype: 'text/plain'
+});
+
+assert.equal(importedBusinessRegistration.ok, true);
+assert.ok(importedBusinessRegistration.text.includes('서울특별시 서대문구'));
 
 const importedPreparedDocuments = await extractPreparedDocumentsFromUploads([
   {

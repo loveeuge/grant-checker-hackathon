@@ -54,6 +54,16 @@ export async function extractTeamTextFromUpload(file, options = {}) {
   });
 }
 
+export async function extractBusinessRegistrationTextFromUpload(file, options = {}) {
+  return extractTextFromUpload(file, {
+    emptyMessage: '사업자등록증 파일을 선택해 주세요.',
+    filename: 'uploaded-business-registration',
+    emptyTextMessage: '텍스트를 추출하지 못했습니다. 스캔 이미지라면 JPG/PNG 사진으로 첨부하거나 텍스트가 포함된 PDF 파일을 사용해 주세요.',
+    imagePurpose: 'business_registration',
+    ...options
+  });
+}
+
 export async function extractPreparedDocumentsFromUploads(files, options = {}) {
   if (!Array.isArray(files) || !files.length) {
     throw new UserInputError('준비서류 파일을 선택해 주세요.');
@@ -335,6 +345,7 @@ function buildImageExtractionPrompt({ filename, imagePurpose }) {
     {
       grant_notice: '지원사업 공고문',
       team_profile: '팀/회사 소개 자료',
+      business_registration: '사업자등록증',
       prepared_document: '준비서류'
     }[imagePurpose] || '문서';
 

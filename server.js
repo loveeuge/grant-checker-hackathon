@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { analyzeApplication } from './src/analyzer.js';
 import { searchAnnouncements } from './src/announcement-search.js';
 import {
+  extractBusinessRegistrationTextFromUpload,
   extractNoticeTextFromUpload,
   extractNoticeTextFromUrl,
   extractPreparedDocumentsFromUploads,
@@ -139,6 +140,7 @@ app.post('/api/requirements/extract', async (req, res) => {
   try {
     const noticeText = String(req.body?.noticeText || '').trim();
     const teamInfo = String(req.body?.teamInfo || '').trim();
+    const businessRegistration = String(req.body?.businessRegistration || '').trim();
 
     if (!noticeText) {
       return res.status(400).json({
@@ -149,7 +151,7 @@ app.post('/api/requirements/extract', async (req, res) => {
 
     const result = await extractRequirements({
       noticeText,
-      teamInfo,
+      teamInfo: appendBusinessRegistrationToTeamInfo(teamInfo, businessRegistration),
       apiKey: runtimeApiKey,
       model
     });
@@ -190,6 +192,15 @@ app.post('/api/import/team/file', singleUpload.single('teamFile'), async (req, r
   }
 });
 
+app.post('/api/import/business-registration/file', singleUpload.single('businessRegistrationFile'), async (req, res) => {
+  try {
+    const result = await extractBusinessRegistrationTextFromUpload(req.file, openAiImportOptions());
+    res.json(result);
+  } catch (error) {
+    sendImportError(res, error, '사업자등록증 파일을 불러오는 중 오류가 발생했습니다.');
+  }
+});
+
 app.post('/api/import/documents/files', documentsUpload.array('documentFiles', 12), async (req, res) => {
   try {
     const result = await extractPreparedDocumentsFromUploads(req.files, openAiImportOptions());
@@ -204,6 +215,7 @@ app.post('/api/analyze', async (req, res) => {
     const noticeText = String(req.body?.noticeText || '').trim();
     const teamInfo = String(req.body?.teamInfo || '').trim();
     const documentsList = String(req.body?.documentsList || '').trim();
+    const businessRegistration = String(req.body?.businessRegistration || '').trim();
 
     if (!noticeText || !teamInfo) {
       return res.status(400).json({
@@ -214,8 +226,8 @@ app.post('/api/analyze', async (req, res) => {
 
     const result = await analyzeApplication({
       noticeText,
-      teamInfo,
-      documentsList,
+      teamInfo: appendBusinessRegistrationToTeamInfo(teamInfo, businessRegistration),
+      documentsList: appendBusinessRegistrationToDocuments(documentsList, businessRegistration),
       apiKey: runtimeApiKey,
       model
     });
@@ -247,6 +259,31 @@ function openAiImportOptions() {
     apiKey: runtimeApiKey,
     model: visionModel
   };
+}
+
+function appendBusinessRegistrationToTeamInfo(teamInfo, businessRegistration) {
+  if (!businessRegistration) return teamInfo;
+
+  return [
+    teamInfo,
+    '[사업자등록증 기본 정보]',
+    businessRegistration
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function appendBusinessRegistrationToDocuments(documentsList, businessRegistration) {
+  if (!businessRegistration) return documentsList;
+
+  return [
+    documentsList,
+    '[사업자등록증 기본 정보]',
+    '- 사업자등록증',
+    businessRegistration
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 function sendImportError(res, error, fallbackMessage = '공고문을 불러오는 중 오류가 발생했습니다.') {
