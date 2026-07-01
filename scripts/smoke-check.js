@@ -21,6 +21,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.join(__dirname, '..');
 const sample = normalizeSamplePayload(JSON.parse(await fs.readFile(path.join(root, 'data', 'sample.json'), 'utf8')));
+const indexHtml = await fs.readFile(path.join(root, 'public', 'index.html'), 'utf8');
+
+assert.ok(indexHtml.includes('id="requirements-panel"'));
+assert.ok(indexHtml.includes('id="prepared-documents" hidden'));
+assert.ok(!indexHtml.includes('id="documents-file-button"'));
+assert.ok(!indexHtml.includes('준비서류 첨부'));
 
 const result = await analyzeApplication({
   noticeText: sample.noticeText,

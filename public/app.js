@@ -111,9 +111,6 @@ function cacheElements() {
     "team-file-input",
     "team-file-button",
     "team-import-note",
-    "documents-file-input",
-    "documents-file-button",
-    "documents-import-note",
     "requirements-panel",
     "selected-announcement-title",
     "selected-announcement-meta",
@@ -159,8 +156,6 @@ function bindEvents() {
   els.teamIntro?.addEventListener("blur", () => {
     if (state.selectedAnnouncement && els.teamIntro.value.trim()) extractRequirementsForCurrent();
   });
-  els.documentsFileButton?.addEventListener("click", () => els.documentsFileInput.click());
-  els.documentsFileInput?.addEventListener("change", importPreparedDocumentFiles);
 }
 
 async function checkAdminStatus() {
@@ -420,6 +415,7 @@ function applyAnnouncementToNotice(item) {
   const text = String(item.noticeText || announcementToNoticeText(item)).trim();
   state.selectedAnnouncement = item;
   state.requirementUploads = {};
+  if (els.preparedDocuments) els.preparedDocuments.value = "";
   els.grantNotice.value = text;
   els.noticeImportNote.textContent = `${item.sourceLabel || "검색"} 공고를 공고문 칸에 입력했습니다.`;
   renderSelectedAnnouncement(item);
@@ -517,6 +513,7 @@ function applyExtractedRequirements(data) {
 
   renderRequirements();
   renderEligibilityAndSignals();
+  syncPreparedDocumentsFromBoard();
 }
 
 function buildLocalRequirements(noticeText) {
@@ -694,10 +691,9 @@ async function handleRequirementFileChange(event) {
 
 async function analyzeInputs() {
   const values = getInputs();
-  const filledCount = [values.grantNotice, values.teamIntro, values.preparedDocuments].filter(Boolean).length;
 
-  if (filledCount < 3) {
-    showBanner("error", "공고문, 팀 소개, 준비 서류를 모두 입력해 주세요. 준비 서류가 아직 없으면 '없음'이라고 적어도 됩니다.");
+  if (!values.grantNotice || !values.teamIntro) {
+    showBanner("error", "공고문과 팀 소개를 먼저 입력해 주세요. 필요서류는 준비보드에서 항목별로 첨부하면 됩니다.");
     return;
   }
 
@@ -815,7 +811,7 @@ function applyImportedNotice(data, label) {
   const sourceLabel = source.kind ? source.kind.toUpperCase() : "파일";
   const truncatedText = source.truncated ? " 긴 문서는 앞부분만 반영했습니다." : "";
   els.noticeImportNote.textContent = `${sourceLabel} 공고문 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
-  showBanner("info", `${label} 공고문을 불러왔습니다. 팀 소개와 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+  showBanner("info", `${label} 공고문을 불러왔습니다. 팀 소개를 넣고 필요서류 보드를 확인하세요.`);
   extractRequirementsForCurrent();
 
   const values = getInputs();
@@ -863,55 +859,8 @@ function applyImportedTeam(data, label) {
   const sourceLabel = source.kind ? source.kind.toUpperCase() : "파일";
   const truncatedText = source.truncated ? " 긴 파일은 앞부분만 반영했습니다." : "";
   els.teamImportNote.textContent = `${sourceLabel} 팀 소개 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
-  showBanner("info", `${label} 팀 소개를 불러왔습니다. 공고문과 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+  showBanner("info", `${label} 팀 소개를 불러왔습니다. 공고문과 필요서류 보드를 기준으로 분석할 수 있습니다.`);
   if (els.grantNotice.value.trim()) extractRequirementsForCurrent();
-
-  const values = getInputs();
-  if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
-    analyzeInputs();
-  }
-}
-
-async function importPreparedDocumentFiles() {
-  const files = Array.from(els.documentsFileInput.files || []);
-  if (!files.length) return;
-
-  const formData = new FormData();
-  files.forEach((file) => formData.append("documentFiles", file));
-
-  setButtonLoading(els.documentsFileButton, true);
-  els.documentsImportNote.textContent = `${files.length}개 준비서류를 정리하는 중입니다.`;
-
-  try {
-    const data = await requestJson("/api/import/documents/files", {
-      method: "POST",
-      body: formData,
-    });
-
-    applyImportedPreparedDocuments(data, files.length);
-  } catch (error) {
-    showBanner("error", `준비서류를 불러오지 못했습니다. ${cleanError(error)}`);
-    els.documentsImportNote.textContent = "여러 파일은 한 번에 12개, 각 파일은 12MB 이하로 첨부해 주세요. 사진 추출은 API key가 필요합니다.";
-  } finally {
-    els.documentsFileInput.value = "";
-    setButtonLoading(els.documentsFileButton, false);
-    renderIcons();
-  }
-}
-
-function applyImportedPreparedDocuments(data, fileCount) {
-  const text = String(data.text || "").trim();
-  if (!text) {
-    showBanner("error", "준비서류 목록을 만들지 못했습니다.");
-    return;
-  }
-
-  const existing = els.preparedDocuments.value.trim();
-  els.preparedDocuments.value = existing ? `${existing}\n\n${text}` : text;
-
-  const extractedCount = Array.isArray(data.documents) ? data.documents.filter((document) => document.extracted).length : 0;
-  els.documentsImportNote.textContent = `${fileCount}개 파일을 정리했습니다. 텍스트 추출 ${extractedCount}개, 파일명 기록 ${fileCount - extractedCount}개.`;
-  showBanner("info", "첨부한 준비서류를 목록으로 정리했습니다. 공고문과 팀 소개가 있으면 바로 분석할 수 있습니다.");
 
   const values = getInputs();
   if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
@@ -1237,7 +1186,7 @@ function buildFallbackAnalysis(values, reason) {
     return {
       item: name,
       status: hasDoc ? "pass" : "missing",
-      evidence: hasDoc ? "준비 서류 목록에서 확인되었습니다." : "현재 준비 서류 목록에서 직접 확인되지 않았습니다.",
+      evidence: hasDoc ? "필요서류 준비보드에서 확인되었습니다." : "현재 필요서류 준비보드에서 직접 확인되지 않았습니다.",
       action: hasDoc ? "제출 양식과 발급일 기준만 재확인하세요." : "발급 가능 여부와 제출 양식을 먼저 확보하세요.",
     };
   });
@@ -1582,7 +1531,7 @@ function hideBanner() {
 }
 
 function getInputs() {
-  const manualDocuments = els.preparedDocuments.value.trim();
+  const manualDocuments = els.preparedDocuments?.value.trim() || "";
   const boardDocuments = buildRequirementBoardText();
   const preparedDocuments =
     boardDocuments && !manualDocuments.includes("[필요서류 체크보드]")
@@ -1599,7 +1548,7 @@ function getInputs() {
 function setInputs(sample) {
   els.grantNotice.value = sample.grantNotice || "";
   els.teamIntro.value = sample.teamIntro || "";
-  els.preparedDocuments.value = sample.preparedDocuments || "";
+  if (els.preparedDocuments) els.preparedDocuments.value = sample.preparedDocuments || "";
 }
 
 function pickFirst(source, keys) {
@@ -1626,6 +1575,7 @@ function containsAny(text, words) {
 }
 
 function syncPreparedDocumentsFromBoard() {
+  if (!els.preparedDocuments) return;
   const boardText = buildRequirementBoardText();
   if (!boardText) return;
 

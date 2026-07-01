@@ -162,24 +162,7 @@
               </div>
               <textarea id="team-intro" placeholder="예: 서울 소재 예비창업팀으로 AI 문서 자동화 서비스를 준비 중..."></textarea>
             </label>
-
-            <label class="text-field" for="prepared-documents">
-              <span>
-                <strong>준비 서류</strong>
-                <small>이미 확보한 서류와 발급 예정 서류를 줄 단위로 넣으면 좋습니다.</small>
-              </span>
-              <div class="documents-importer">
-                <div class="import-row">
-                  <input id="documents-file-input" type="file" multiple accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.html,.htm,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*,image/jpeg,image/png,image/webp,image/gif" />
-                  <button id="documents-file-button" class="button ghost" type="button">
-                    <i data-lucide="folder-up" aria-hidden="true"></i>
-                    준비서류 첨부
-                  </button>
-                </div>
-                <p id="documents-import-note" class="form-note" role="status">여러 파일과 사진을 첨부하면 파일명과 추출 내용을 준비서류 목록으로 정리합니다. 사진 추출은 API key 등록 후 작동합니다.</p>
-              </div>
-              <textarea id="prepared-documents" placeholder="예: 사업계획서 초안, 대표자 신분증, 개인정보 수집 동의서..."></textarea>
-            </label>
+            <textarea id="prepared-documents" hidden aria-hidden="true"></textarea>
           </div>
         </section>
 

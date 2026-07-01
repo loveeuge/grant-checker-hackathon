@@ -205,10 +205,10 @@ app.post('/api/analyze', async (req, res) => {
     const teamInfo = String(req.body?.teamInfo || '').trim();
     const documentsList = String(req.body?.documentsList || '').trim();
 
-    if (!noticeText || !teamInfo || !documentsList) {
+    if (!noticeText || !teamInfo) {
       return res.status(400).json({
         ok: false,
-        error: '공고문, 팀 소개, 준비 서류 목록을 모두 입력해야 합니다.'
+        error: '공고문과 팀 소개를 먼저 입력해야 합니다.'
       });
     }
 
