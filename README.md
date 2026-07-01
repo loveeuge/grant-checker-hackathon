@@ -53,31 +53,39 @@ GitHub Pages는 정적 사이트 호스팅이므로 발표용 화면, 샘플 채
 npm run check
 ```
 
-## OpenAI API Key 입력 방식
+## OpenAI API Key 사용 방식
 
-API key는 발표자 또는 운영 관리자가 로컬 실행 환경에만 입력합니다. 저장소, 샘플 데이터, 화면 캡처, 발표 자료에는 실제 key를 넣지 않습니다. 메인 분석 화면에는 key 입력 영역을 두지 않고, `http://localhost:5173/admin` 관리자 화면에서만 등록합니다. 입력한 key는 서버 메모리에만 보관하고 브라우저 저장소에는 남기지 않습니다.
+API key는 발표자 또는 운영 관리자가 로컬 실행 환경의 `.env` 파일에만 입력합니다. 저장소, 샘플 데이터, 화면 캡처, 발표 자료에는 실제 key를 넣지 않습니다. 메인 분석 화면에는 key 입력 영역이나 관리자 진입 버튼을 두지 않습니다.
 
-로컬 환경 변수 방식:
+권장 방식은 로컬 전용 `.env` 파일입니다. `.env`는 `.gitignore`에 포함되어 GitHub에 올라가지 않습니다.
 
 ```bash
-export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
-npm start
+cp .env.example .env
 ```
 
-로컬 전용 `.env` 파일 방식:
+`.env` 파일 예시:
 
 ```bash
+PORT=5173
 OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_VISION_MODEL=gpt-5.4-mini
+OPENAI_MODEL=gpt-5.5-pro
+OPENAI_VISION_MODEL=gpt-5.5-pro
 BIZINFO_API_KEY=
 ADMIN_TOKEN=
 ```
 
+저장 후 서버를 재시작합니다.
+
+```bash
+npm start
+```
+
+`public/admin.html`은 개발 중 서버 상태나 런타임 key 등록을 확인하기 위한 예비 화면으로 남겨둡니다. 과제 제출과 발표 시연은 메인 화면과 `.env` 방식만 사용합니다.
+
 주의:
 
 - 실제 key를 `README.md`, `data/sample.json`, 화면 녹화, Git 커밋에 포함하지 않습니다.
-- key 입력은 관리자 PC에서만 수행하고, 참가자나 심사위원에게 key 입력을 요청하지 않습니다.
+- key 입력은 발표자 로컬 PC의 `.env`에서만 수행하고, 참가자나 심사위원에게 key 입력을 요청하지 않습니다.
 - 데모용 샘플에는 가상 공고와 가상 팀 정보만 사용합니다.
 
 ## 오늘 만들 MVP 범위

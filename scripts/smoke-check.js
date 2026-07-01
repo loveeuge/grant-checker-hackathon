@@ -22,11 +22,15 @@ const __dirname = path.dirname(__filename);
 const root = path.join(__dirname, '..');
 const sample = normalizeSamplePayload(JSON.parse(await fs.readFile(path.join(root, 'data', 'sample.json'), 'utf8')));
 const indexHtml = await fs.readFile(path.join(root, 'public', 'index.html'), 'utf8');
+const envExample = await fs.readFile(path.join(root, '.env.example'), 'utf8');
 
 assert.ok(indexHtml.includes('id="requirements-panel"'));
 assert.ok(indexHtml.includes('id="prepared-documents" hidden'));
 assert.ok(!indexHtml.includes('id="documents-file-button"'));
 assert.ok(!indexHtml.includes('준비서류 첨부'));
+assert.ok(!indexHtml.includes('href="./admin.html"'));
+assert.ok(envExample.includes('OPENAI_MODEL=gpt-5.5-pro'));
+assert.ok(envExample.includes('OPENAI_VISION_MODEL=gpt-5.5-pro'));
 
 const result = await analyzeApplication({
   noticeText: sample.noticeText,
