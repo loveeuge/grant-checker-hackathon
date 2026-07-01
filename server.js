@@ -13,6 +13,7 @@ import {
   extractTeamTextFromUpload,
   isUserInputError
 } from './src/notice-importer.js';
+import { extractRequirements } from './src/requirements.js';
 import { normalizeSamplePayload } from './src/sample-normalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -130,6 +131,34 @@ app.get('/api/announcements/search', async (req, res) => {
     res.status(500).json({
       ok: false,
       error: '공고 검색 중 오류가 발생했습니다. 검색 조건을 줄이거나 잠시 후 다시 시도해 주세요.'
+    });
+  }
+});
+
+app.post('/api/requirements/extract', async (req, res) => {
+  try {
+    const noticeText = String(req.body?.noticeText || '').trim();
+    const teamInfo = String(req.body?.teamInfo || '').trim();
+
+    if (!noticeText) {
+      return res.status(400).json({
+        ok: false,
+        error: '공고문을 먼저 선택하거나 입력해야 합니다.'
+      });
+    }
+
+    const result = await extractRequirements({
+      noticeText,
+      teamInfo,
+      apiKey: runtimeApiKey,
+      model
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('[requirements:error]', error?.message || error);
+    res.status(500).json({
+      ok: false,
+      error: '필요서류를 추출하는 중 오류가 발생했습니다.'
     });
   }
 });

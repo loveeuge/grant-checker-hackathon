@@ -14,6 +14,7 @@ import {
   extractPreparedDocumentsFromUploads,
   extractTeamTextFromUpload
 } from '../src/notice-importer.js';
+import { extractRequirements } from '../src/requirements.js';
 import { normalizeSamplePayload } from '../src/sample-normalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -111,5 +112,15 @@ assert.ok(buildAnnouncementNoticeText(normalizedAnnouncement).includes('AI 서�
 const bizinfoOnly = await searchAnnouncements({ source: 'bizinfo', keyword: 'AI' }, { BIZINFO_API_KEY: '' });
 assert.equal(bizinfoOnly.ok, true);
 assert.equal(bizinfoOnly.sources[0].status, 'skipped');
+
+const requirements = await extractRequirements({
+  noticeText:
+    '제출서류: 지원신청서, 사업계획서, 사업자등록증, 개인정보 수집 이용 동의서\n지원대상: 서울 소재 예비창업자 및 일반기업',
+  teamInfo: '서울 소재 예비창업팀이며 AI 문서 자동화 서비스를 준비 중입니다.'
+});
+
+assert.equal(requirements.ok, true);
+assert.ok(requirements.requiredDocuments.some((document) => document.name.includes('사업계획서')));
+assert.ok(requirements.eligibilityRequirements.length >= 1);
 
 console.log('Smoke check passed');

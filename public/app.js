@@ -4,6 +4,11 @@ const state = {
   demoMode: false,
   lastError: "",
   announcements: [],
+  selectedAnnouncement: null,
+  requirements: [],
+  eligibilityRequirements: [],
+  selectionSignals: [],
+  requirementUploads: {},
 };
 
 const localSample = {
@@ -109,6 +114,15 @@ function cacheElements() {
     "documents-file-input",
     "documents-file-button",
     "documents-import-note",
+    "requirements-panel",
+    "selected-announcement-title",
+    "selected-announcement-meta",
+    "apply-link",
+    "refresh-requirements-button",
+    "requirements-summary",
+    "requirements-list",
+    "eligibility-summary",
+    "eligibility-list",
     "grant-notice",
     "team-intro",
     "prepared-documents",
@@ -126,6 +140,9 @@ function bindEvents() {
   els.adminKeyForm?.addEventListener("submit", saveAdminKey);
   els.announcementSearchForm?.addEventListener("submit", searchAnnouncements);
   els.announcementResults?.addEventListener("click", handleAnnouncementAction);
+  els.refreshRequirementsButton?.addEventListener("click", extractRequirementsForCurrent);
+  els.requirementsList?.addEventListener("click", handleRequirementClick);
+  els.requirementsList?.addEventListener("change", handleRequirementFileChange);
   els.sampleButton?.addEventListener("click", fillSample);
   els.analyzeButton?.addEventListener("click", analyzeInputs);
   els.noticeFileButton?.addEventListener("click", () => els.noticeFileInput.click());
@@ -139,6 +156,9 @@ function bindEvents() {
   });
   els.teamFileButton?.addEventListener("click", () => els.teamFileInput.click());
   els.teamFileInput?.addEventListener("change", importTeamFile);
+  els.teamIntro?.addEventListener("blur", () => {
+    if (state.selectedAnnouncement && els.teamIntro.value.trim()) extractRequirementsForCurrent();
+  });
   els.documentsFileButton?.addEventListener("click", () => els.documentsFileInput.click());
   els.documentsFileInput?.addEventListener("change", importPreparedDocumentFiles);
 }
@@ -366,7 +386,11 @@ function renderAnnouncementCard(item) {
         </button>
         ${
           url
-            ? `<a class="button ghost" href="${url}" target="_blank" rel="noreferrer">
+            ? `<a class="button secondary" href="${url}" target="_blank" rel="noreferrer">
+                <i data-lucide="send" aria-hidden="true"></i>
+                신청하러 가기
+              </a>
+              <a class="button ghost" href="${url}" target="_blank" rel="noreferrer">
                 <i data-lucide="external-link" aria-hidden="true"></i>
                 원문 보기
               </a>`
@@ -394,13 +418,277 @@ function handleAnnouncementAction(event) {
 
 function applyAnnouncementToNotice(item) {
   const text = String(item.noticeText || announcementToNoticeText(item)).trim();
+  state.selectedAnnouncement = item;
+  state.requirementUploads = {};
   els.grantNotice.value = text;
   els.noticeImportNote.textContent = `${item.sourceLabel || "검색"} 공고를 공고문 칸에 입력했습니다.`;
-  showBanner("info", `${item.title} 공고를 검토 자료에 넣었습니다. 팀 소개와 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+  renderSelectedAnnouncement(item);
+  extractRequirementsForCurrent();
+  showBanner("info", `${item.title} 공고를 검토 자료에 넣었습니다. 회사소개를 넣고 필요한 서류를 항목별로 첨부하세요.`);
 
   const values = getInputs();
   if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
     analyzeInputs();
+  }
+}
+
+function renderSelectedAnnouncement(item) {
+  els.selectedAnnouncementTitle.textContent = item?.title || "아직 선택한 공고가 없습니다";
+  els.selectedAnnouncementMeta.textContent = [
+    item?.sourceLabel || item?.source || "",
+    item?.organization || "",
+    item?.period || "",
+    item?.region ? `지역 ${item.region}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ") || "공고 검색 결과에서 이 공고로 분석하기를 누르면 필요서류가 자동으로 생성됩니다.";
+
+  if (item?.url) {
+    els.applyLink.href = item.url;
+    els.applyLink.classList.remove("is-disabled");
+    els.applyLink.setAttribute("aria-disabled", "false");
+  } else {
+    els.applyLink.href = "#";
+    els.applyLink.classList.add("is-disabled");
+    els.applyLink.setAttribute("aria-disabled", "true");
+  }
+}
+
+async function extractRequirementsForCurrent() {
+  const noticeText = els.grantNotice.value.trim();
+  if (!noticeText) {
+    showBanner("error", "공고를 먼저 선택하거나 입력해 주세요.");
+    return;
+  }
+
+  setButtonLoading(els.refreshRequirementsButton, true);
+  els.requirementsSummary.textContent = "추출 중";
+  els.eligibilitySummary.textContent = "분석 중";
+  renderRequirementsLoading();
+
+  try {
+    const data = await requestJson("/api/requirements/extract", {
+      method: "POST",
+      body: JSON.stringify({
+        noticeText,
+        teamInfo: els.teamIntro.value.trim(),
+      }),
+    });
+
+    applyExtractedRequirements(data);
+  } catch (error) {
+    const fallback = buildLocalRequirements(noticeText);
+    applyExtractedRequirements(fallback);
+    showBanner("warning", `필요서류 API를 사용할 수 없어 기본 체크보드를 만들었습니다. ${cleanError(error)}`);
+  } finally {
+    setButtonLoading(els.refreshRequirementsButton, false);
+    renderIcons();
+  }
+}
+
+function renderRequirementsLoading() {
+  els.requirementsList.innerHTML = `
+    <div class="requirement-empty">
+      <i data-lucide="loader-circle" aria-hidden="true"></i>
+      <span>공고에서 필요한 서류를 찾는 중입니다.</span>
+    </div>
+  `;
+  els.eligibilityList.innerHTML = `
+    <div class="requirement-empty">
+      <i data-lucide="loader-circle" aria-hidden="true"></i>
+      <span>자격요건과 선정 신호를 정리하는 중입니다.</span>
+    </div>
+  `;
+  renderIcons();
+}
+
+function applyExtractedRequirements(data) {
+  state.requirements = Array.isArray(data.requiredDocuments) ? data.requiredDocuments : [];
+  state.eligibilityRequirements = Array.isArray(data.eligibilityRequirements) ? data.eligibilityRequirements : [];
+  state.selectionSignals = Array.isArray(data.selectionSignals) ? data.selectionSignals : [];
+
+  if (data.applyUrl && (!state.selectedAnnouncement || !state.selectedAnnouncement.url)) {
+    state.selectedAnnouncement = {
+      ...(state.selectedAnnouncement || {}),
+      url: data.applyUrl,
+    };
+    renderSelectedAnnouncement(state.selectedAnnouncement);
+  }
+
+  renderRequirements();
+  renderEligibilityAndSignals();
+}
+
+function buildLocalRequirements(noticeText) {
+  const hasBusiness = containsAny(noticeText, ["사업계획서", "계획서", "제안서"]);
+  const hasPrivacy = containsAny(noticeText, ["개인정보", "동의서"]);
+  const hasCertificate = containsAny(noticeText, ["사업자등록증", "예비창업", "등록증"]);
+  const docs = [
+    { name: "지원신청서", reason: "공식 신청 화면 또는 첨부 양식 확인이 필요합니다.", evidence: "기본 신청 절차 기준" },
+    { name: hasBusiness ? "사업계획서" : "사업계획서/제안서", reason: "사업 내용과 실행 계획을 설명하는 핵심 서류입니다.", evidence: "공고문 또는 일반 제출서류 기준" },
+    hasCertificate
+      ? { name: "사업자등록증 또는 예비창업 확인 자료", reason: "신청 대상과 업력 확인에 필요할 수 있습니다.", evidence: "공고문에서 사업자/예비창업 관련 표현 확인" }
+      : null,
+    hasPrivacy
+      ? { name: "개인정보 수집·이용 동의서", reason: "접수와 평가 과정의 개인정보 처리 동의가 필요할 수 있습니다.", evidence: "공고문에서 개인정보 관련 표현 확인" }
+      : null,
+  ].filter(Boolean);
+
+  return {
+    ok: true,
+    mode: "fallback",
+    requiredDocuments: docs.map((doc, index) => ({
+      ...doc,
+      id: `local-doc-${index + 1}`,
+      requiredLevel: "필수 또는 확인 필요",
+      status: "미첨부",
+    })),
+    eligibilityRequirements: [
+      { item: "신청 대상", status: "확인 필요", evidence: "공고문 기준 확인 필요", question: "우리 회사가 공고 신청 대상인지 확인하세요." },
+      { item: "접수 기간", status: "확인 필요", evidence: "마감일과 제출 채널 확인 필요", question: "공식 신청 페이지에서 마감 시간을 확인하세요." },
+    ],
+    selectionSignals: [
+      { item: "사업화 가능성", status: "보완 필요", action: "회사소개에서 고객 문제, 시장성, 실행 계획을 더 구체화하세요." },
+    ],
+  };
+}
+
+function renderRequirements() {
+  els.requirementsSummary.textContent = state.requirements.length
+    ? `${state.requirements.length}개 서류`
+    : "서류 없음";
+
+  if (!state.requirements.length) {
+    els.requirementsList.innerHTML = `
+      <div class="requirement-empty">
+        <i data-lucide="folder-x" aria-hidden="true"></i>
+        <span>자동 추출된 서류가 없습니다. 공고 원문을 확인하세요.</span>
+      </div>
+    `;
+    renderIcons();
+    return;
+  }
+
+  els.requirementsList.innerHTML = state.requirements.map(renderRequirementRow).join("");
+  renderIcons();
+}
+
+function renderRequirementRow(document) {
+  const upload = state.requirementUploads[document.id];
+  const status = upload ? (upload.extractedCount > 0 ? "첨부 확인" : "첨부됨") : "미첨부";
+  const statusClass = upload ? "status-pass" : "status-unknown";
+  const fileInputId = `requirement-file-${escapeAttribute(document.id)}`;
+
+  return `
+    <article class="requirement-row">
+      <div class="requirement-main">
+        <span class="table-status ${statusClass}">${escapeHtml(status)}</span>
+        <h4>${escapeHtml(document.name)}</h4>
+        <p>${escapeHtml(document.reason || document.evidence || "공고 기준 확인이 필요합니다.")}</p>
+        ${upload ? `<small>${escapeHtml(upload.fileCount)}개 파일 첨부 · 텍스트 추출 ${escapeHtml(upload.extractedCount)}개</small>` : ""}
+      </div>
+      <div class="requirement-actions">
+        <input id="${fileInputId}" data-requirement-file="${escapeAttribute(document.id)}" type="file" multiple accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.html,.htm,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*,image/jpeg,image/png,image/webp,image/gif" />
+        <button class="button ghost" type="button" data-requirement-attach="${escapeAttribute(document.id)}">
+          <i data-lucide="paperclip" aria-hidden="true"></i>
+          첨부
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function renderEligibilityAndSignals() {
+  const eligibility = state.eligibilityRequirements || [];
+  const signals = state.selectionSignals || [];
+  els.eligibilitySummary.textContent = `${eligibility.length}개 요건 · ${signals.length}개 신호`;
+
+  const eligibilityHtml = eligibility.length
+    ? eligibility
+        .map(
+          (item) => `
+            <article class="signal-row">
+              <span class="table-status ${statusClassForText(item.status)}">${escapeHtml(item.status || "확인 필요")}</span>
+              <div>
+                <h4>${escapeHtml(item.item)}</h4>
+                <p>${escapeHtml(item.evidence || item.question || "")}</p>
+              </div>
+            </article>
+          `,
+        )
+        .join("")
+    : "";
+
+  const signalHtml = signals.length
+    ? signals
+        .map(
+          (item) => `
+            <article class="signal-row">
+              <span class="table-status ${statusClassForText(item.status)}">${escapeHtml(item.status || "보완 필요")}</span>
+              <div>
+                <h4>${escapeHtml(item.item)}</h4>
+                <p>${escapeHtml(item.action || "")}</p>
+              </div>
+            </article>
+          `,
+        )
+        .join("")
+    : "";
+
+  els.eligibilityList.innerHTML =
+    eligibilityHtml || signalHtml
+      ? `${eligibilityHtml}${signalHtml}`
+      : `
+        <div class="requirement-empty">
+          <i data-lucide="badge-check" aria-hidden="true"></i>
+          <span>회사소개와 공고 기준으로 확인할 요건이 여기에 표시됩니다.</span>
+        </div>
+      `;
+  renderIcons();
+}
+
+function handleRequirementClick(event) {
+  const button = event.target.closest("[data-requirement-attach]");
+  if (!button) return;
+  const input = els.requirementsList.querySelector(`[data-requirement-file="${button.dataset.requirementAttach}"]`);
+  input?.click();
+}
+
+async function handleRequirementFileChange(event) {
+  const input = event.target.closest("[data-requirement-file]");
+  if (!input) return;
+  const documentId = input.dataset.requirementFile;
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+
+  const document = state.requirements.find((item) => item.id === documentId);
+  const formData = new FormData();
+  files.forEach((file) => formData.append("documentFiles", file));
+
+  input.disabled = true;
+  showBanner("info", `${document?.name || "필요서류"} 파일을 읽는 중입니다.`);
+
+  try {
+    const data = await requestJson("/api/import/documents/files", {
+      method: "POST",
+      body: formData,
+    });
+
+    const documents = Array.isArray(data.documents) ? data.documents : [];
+    state.requirementUploads[documentId] = {
+      fileCount: files.length,
+      extractedCount: documents.filter((item) => item.extracted).length,
+      text: String(data.text || "").trim(),
+      documents,
+    };
+    syncPreparedDocumentsFromBoard();
+    renderRequirements();
+    showBanner("info", `${document?.name || "필요서류"} 첨부 내용을 준비보드에 반영했습니다.`);
+  } catch (error) {
+    showBanner("error", `필요서류 첨부를 읽지 못했습니다. ${cleanError(error)}`);
+  } finally {
+    input.value = "";
+    input.disabled = false;
   }
 }
 
@@ -528,6 +816,7 @@ function applyImportedNotice(data, label) {
   const truncatedText = source.truncated ? " 긴 문서는 앞부분만 반영했습니다." : "";
   els.noticeImportNote.textContent = `${sourceLabel} 공고문 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
   showBanner("info", `${label} 공고문을 불러왔습니다. 팀 소개와 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+  extractRequirementsForCurrent();
 
   const values = getInputs();
   if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
@@ -575,6 +864,7 @@ function applyImportedTeam(data, label) {
   const truncatedText = source.truncated ? " 긴 파일은 앞부분만 반영했습니다." : "";
   els.teamImportNote.textContent = `${sourceLabel} 팀 소개 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
   showBanner("info", `${label} 팀 소개를 불러왔습니다. 공고문과 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+  if (els.grantNotice.value.trim()) extractRequirementsForCurrent();
 
   const values = getInputs();
   if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
@@ -1292,10 +1582,17 @@ function hideBanner() {
 }
 
 function getInputs() {
+  const manualDocuments = els.preparedDocuments.value.trim();
+  const boardDocuments = buildRequirementBoardText();
+  const preparedDocuments =
+    boardDocuments && !manualDocuments.includes("[필요서류 체크보드]")
+      ? [manualDocuments, boardDocuments].filter(Boolean).join("\n\n")
+      : manualDocuments;
+
   return {
     grantNotice: els.grantNotice.value.trim(),
     teamIntro: els.teamIntro.value.trim(),
-    preparedDocuments: els.preparedDocuments.value.trim(),
+    preparedDocuments,
   };
 }
 
@@ -1326,6 +1623,63 @@ function countByStatus(rows, status) {
 function containsAny(text, words) {
   const lower = String(text || "").toLowerCase();
   return words.some((word) => lower.includes(String(word).toLowerCase()));
+}
+
+function syncPreparedDocumentsFromBoard() {
+  const boardText = buildRequirementBoardText();
+  if (!boardText) return;
+
+  const current = els.preparedDocuments.value.trim();
+  const manual = current.replace(/\n*\[필요서류 체크보드][\s\S]*$/m, "").trim();
+  els.preparedDocuments.value = [manual, boardText].filter(Boolean).join("\n\n");
+}
+
+function buildRequirementBoardText() {
+  if (!Array.isArray(state.requirements) || !state.requirements.length) return "";
+
+  const lines = ["[필요서류 체크보드]"];
+  for (const document of state.requirements) {
+    const upload = state.requirementUploads[document.id];
+    lines.push(`- ${document.name}`);
+    lines.push(`  상태: ${upload ? `첨부됨 (${upload.fileCount}개 파일, 텍스트 추출 ${upload.extractedCount}개)` : "미첨부"}`);
+    if (document.reason) lines.push(`  필요한 이유: ${document.reason}`);
+    if (document.evidence) lines.push(`  공고 근거: ${document.evidence}`);
+    if (upload?.text) lines.push(`  첨부 내용:\n${indentBlock(upload.text, "    ")}`);
+  }
+
+  if (state.eligibilityRequirements.length) {
+    lines.push("", "[자격요건 체크]");
+    state.eligibilityRequirements.forEach((item) => {
+      lines.push(`- ${item.item}: ${item.status || "확인 필요"}`);
+      if (item.evidence) lines.push(`  근거: ${item.evidence}`);
+      if (item.question) lines.push(`  확인질문: ${item.question}`);
+    });
+  }
+
+  if (state.selectionSignals.length) {
+    lines.push("", "[선정 가능성 신호]");
+    state.selectionSignals.forEach((item) => {
+      lines.push(`- ${item.item}: ${item.status || "보완 필요"}`);
+      if (item.action) lines.push(`  보완방향: ${item.action}`);
+    });
+  }
+
+  return lines.join("\n").trim();
+}
+
+function indentBlock(value, indent) {
+  return String(value || "")
+    .split("\n")
+    .map((line) => `${indent}${line}`)
+    .join("\n");
+}
+
+function statusClassForText(status) {
+  const text = String(status || "");
+  if (/적합|충족|준비|첨부|강점|가능/.test(text)) return "status-pass";
+  if (/부적합|누락|미충족|마감/.test(text)) return "status-fail";
+  if (/보완|확인|필요|미첨부/.test(text)) return "status-warn";
+  return "status-info";
 }
 
 function summarizeAnnouncementSources(sources) {
