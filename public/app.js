@@ -51,6 +51,17 @@ function cacheElements() {
     "notice-banner",
     "sample-button",
     "analyze-button",
+    "notice-file-input",
+    "notice-file-button",
+    "notice-url-input",
+    "notice-url-button",
+    "notice-import-note",
+    "team-file-input",
+    "team-file-button",
+    "team-import-note",
+    "documents-file-input",
+    "documents-file-button",
+    "documents-import-note",
     "grant-notice",
     "team-intro",
     "prepared-documents",
@@ -64,10 +75,23 @@ function cacheElements() {
 }
 
 function bindEvents() {
-  els.refreshStatusButton.addEventListener("click", checkAdminStatus);
-  els.adminKeyForm.addEventListener("submit", saveAdminKey);
-  els.sampleButton.addEventListener("click", fillSample);
-  els.analyzeButton.addEventListener("click", analyzeInputs);
+  els.refreshStatusButton?.addEventListener("click", checkAdminStatus);
+  els.adminKeyForm?.addEventListener("submit", saveAdminKey);
+  els.sampleButton?.addEventListener("click", fillSample);
+  els.analyzeButton?.addEventListener("click", analyzeInputs);
+  els.noticeFileButton?.addEventListener("click", () => els.noticeFileInput.click());
+  els.noticeFileInput?.addEventListener("change", importNoticeFile);
+  els.noticeUrlButton?.addEventListener("click", importNoticeUrl);
+  els.noticeUrlInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      importNoticeUrl();
+    }
+  });
+  els.teamFileButton?.addEventListener("click", () => els.teamFileInput.click());
+  els.teamFileInput?.addEventListener("change", importTeamFile);
+  els.documentsFileButton?.addEventListener("click", () => els.documentsFileInput.click());
+  els.documentsFileInput?.addEventListener("change", importPreparedDocumentFiles);
 }
 
 async function checkAdminStatus() {
@@ -230,12 +254,181 @@ async function analyzeInputs() {
   }
 }
 
+async function importNoticeFile() {
+  const file = els.noticeFileInput.files?.[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("noticeFile", file);
+
+  setButtonLoading(els.noticeFileButton, true);
+  els.noticeImportNote.textContent = `${file.name}에서 공고문을 추출하는 중입니다.`;
+
+  try {
+    const data = await requestJson("/api/import/notice/file", {
+      method: "POST",
+      body: formData,
+    });
+
+    applyImportedNotice(data, file.name);
+  } catch (error) {
+    showBanner("error", `파일을 불러오지 못했습니다. ${cleanError(error)}`);
+    els.noticeImportNote.textContent = "사진이나 스캔 이미지는 관리자 화면에서 API key를 등록한 뒤 JPG, PNG, WEBP, GIF로 첨부해 주세요.";
+  } finally {
+    els.noticeFileInput.value = "";
+    setButtonLoading(els.noticeFileButton, false);
+    renderIcons();
+  }
+}
+
+async function importNoticeUrl() {
+  const url = els.noticeUrlInput.value.trim();
+  if (!url) {
+    els.noticeImportNote.textContent = "불러올 공고문 URL을 입력해 주세요.";
+    els.noticeUrlInput.focus();
+    return;
+  }
+
+  setButtonLoading(els.noticeUrlButton, true);
+  els.noticeImportNote.textContent = "URL에서 공고문을 불러오는 중입니다.";
+
+  try {
+    const data = await requestJson("/api/import/notice/url", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+
+    applyImportedNotice(data, url);
+  } catch (error) {
+    showBanner("error", `URL을 불러오지 못했습니다. ${cleanError(error)}`);
+    els.noticeImportNote.textContent = "공개된 http/https 공고문 URL만 사용할 수 있습니다.";
+  } finally {
+    setButtonLoading(els.noticeUrlButton, false);
+    renderIcons();
+  }
+}
+
+function applyImportedNotice(data, label) {
+  const text = String(data.text || "").trim();
+  if (!text) {
+    showBanner("error", "공고문 텍스트를 찾지 못했습니다.");
+    return;
+  }
+
+  els.grantNotice.value = text;
+  const source = data.source || {};
+  const sourceLabel = source.kind ? source.kind.toUpperCase() : "파일";
+  const truncatedText = source.truncated ? " 긴 문서는 앞부분만 반영했습니다." : "";
+  els.noticeImportNote.textContent = `${sourceLabel} 공고문 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
+  showBanner("info", `${label} 공고문을 불러왔습니다. 팀 소개와 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+
+  const values = getInputs();
+  if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
+    analyzeInputs();
+  }
+}
+
+async function importTeamFile() {
+  const file = els.teamFileInput.files?.[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("teamFile", file);
+
+  setButtonLoading(els.teamFileButton, true);
+  els.teamImportNote.textContent = `${file.name}에서 팀 소개를 추출하는 중입니다.`;
+
+  try {
+    const data = await requestJson("/api/import/team/file", {
+      method: "POST",
+      body: formData,
+    });
+
+    applyImportedTeam(data, file.name);
+  } catch (error) {
+    showBanner("error", `팀 소개 파일을 불러오지 못했습니다. ${cleanError(error)}`);
+    els.teamImportNote.textContent = "사진이나 이미지 중심 파일은 관리자 화면에서 API key를 등록한 뒤 JPG, PNG, WEBP, GIF로 첨부해 주세요.";
+  } finally {
+    els.teamFileInput.value = "";
+    setButtonLoading(els.teamFileButton, false);
+    renderIcons();
+  }
+}
+
+function applyImportedTeam(data, label) {
+  const text = String(data.text || "").trim();
+  if (!text) {
+    showBanner("error", "팀 소개 텍스트를 찾지 못했습니다.");
+    return;
+  }
+
+  els.teamIntro.value = text;
+  const source = data.source || {};
+  const sourceLabel = source.kind ? source.kind.toUpperCase() : "파일";
+  const truncatedText = source.truncated ? " 긴 파일은 앞부분만 반영했습니다." : "";
+  els.teamImportNote.textContent = `${sourceLabel} 팀 소개 ${text.length.toLocaleString("ko-KR")}자를 불러왔습니다.${truncatedText}`;
+  showBanner("info", `${label} 팀 소개를 불러왔습니다. 공고문과 준비 서류가 있으면 바로 분석할 수 있습니다.`);
+
+  const values = getInputs();
+  if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
+    analyzeInputs();
+  }
+}
+
+async function importPreparedDocumentFiles() {
+  const files = Array.from(els.documentsFileInput.files || []);
+  if (!files.length) return;
+
+  const formData = new FormData();
+  files.forEach((file) => formData.append("documentFiles", file));
+
+  setButtonLoading(els.documentsFileButton, true);
+  els.documentsImportNote.textContent = `${files.length}개 준비서류를 정리하는 중입니다.`;
+
+  try {
+    const data = await requestJson("/api/import/documents/files", {
+      method: "POST",
+      body: formData,
+    });
+
+    applyImportedPreparedDocuments(data, files.length);
+  } catch (error) {
+    showBanner("error", `준비서류를 불러오지 못했습니다. ${cleanError(error)}`);
+    els.documentsImportNote.textContent = "여러 파일은 한 번에 12개, 각 파일은 12MB 이하로 첨부해 주세요. 사진 추출은 API key가 필요합니다.";
+  } finally {
+    els.documentsFileInput.value = "";
+    setButtonLoading(els.documentsFileButton, false);
+    renderIcons();
+  }
+}
+
+function applyImportedPreparedDocuments(data, fileCount) {
+  const text = String(data.text || "").trim();
+  if (!text) {
+    showBanner("error", "준비서류 목록을 만들지 못했습니다.");
+    return;
+  }
+
+  const existing = els.preparedDocuments.value.trim();
+  els.preparedDocuments.value = existing ? `${existing}\n\n${text}` : text;
+
+  const extractedCount = Array.isArray(data.documents) ? data.documents.filter((document) => document.extracted).length : 0;
+  els.documentsImportNote.textContent = `${fileCount}개 파일을 정리했습니다. 텍스트 추출 ${extractedCount}개, 파일명 기록 ${fileCount - extractedCount}개.`;
+  showBanner("info", "첨부한 준비서류를 목록으로 정리했습니다. 공고문과 팀 소개가 있으면 바로 분석할 수 있습니다.");
+
+  const values = getInputs();
+  if (values.grantNotice && values.teamIntro && values.preparedDocuments) {
+    analyzeInputs();
+  }
+}
+
 async function requestJson(url, options = {}) {
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const response = await fetch(url, {
     ...options,
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers || {}),
     },
   });
@@ -820,41 +1013,48 @@ function renderStatus(status) {
 
 function updateStatusViews() {
   if (state.apiAvailable) {
-    els.serverStatusText.textContent = "연결됨";
-    els.serverStatusDetail.textContent = "/api/admin/status 응답을 받았습니다.";
+    if (els.serverStatusText) els.serverStatusText.textContent = "연결됨";
+    if (els.serverStatusDetail) els.serverStatusDetail.textContent = "/api/admin/status 응답을 받았습니다.";
     setPill(els.apiStatusPill, "live", "API 연결됨", "radio-tower");
   } else {
-    els.serverStatusText.textContent = "데모 모드";
-    els.serverStatusDetail.textContent = state.lastError ? `상태 확인 실패: ${state.lastError}` : "서버 응답이 없어 내장 데모로 동작합니다.";
+    if (els.serverStatusText) els.serverStatusText.textContent = "데모 모드";
+    if (els.serverStatusDetail) {
+      els.serverStatusDetail.textContent = state.lastError ? `상태 확인 실패: ${state.lastError}` : "서버 응답이 없어 내장 데모로 동작합니다.";
+    }
     setPill(els.apiStatusPill, "error", "API 미연결", "radio-tower");
   }
 
   if (state.keyConfigured) {
-    els.adminKeyStatusText.textContent = "등록됨";
-    els.adminKeyStatusDetail.textContent = "서버에 key가 설정되어 있습니다.";
+    if (els.adminKeyStatusText) els.adminKeyStatusText.textContent = "등록됨";
+    if (els.adminKeyStatusDetail) els.adminKeyStatusDetail.textContent = "서버에 key가 설정되어 있습니다.";
     setPill(els.keyStatusPill, "live", "Key 등록됨", "key-round");
   } else {
-    els.adminKeyStatusText.textContent = state.apiAvailable ? "미등록" : "확인 불가";
-    els.adminKeyStatusDetail.textContent = state.apiAvailable
-      ? "서버는 연결됐지만 key 설정이 필요합니다."
-      : "서버 연결 전에는 key 상태를 확인할 수 없습니다.";
+    if (els.adminKeyStatusText) els.adminKeyStatusText.textContent = state.apiAvailable ? "미등록" : "확인 불가";
+    if (els.adminKeyStatusDetail) {
+      els.adminKeyStatusDetail.textContent = state.apiAvailable
+        ? "서버는 연결됐지만 key 설정이 필요합니다."
+        : "서버 연결 전에는 key 상태를 확인할 수 없습니다.";
+    }
     setPill(els.keyStatusPill, state.apiAvailable ? "warning" : "muted", state.apiAvailable ? "Key 필요" : "Key 확인 불가", "key-round");
   }
 
+  const shouldUseDemoMode = state.demoMode || !state.apiAvailable || !state.keyConfigured;
   setPill(
     els.modePill,
-    state.demoMode || !state.apiAvailable ? "demo" : "live",
-    state.demoMode || !state.apiAvailable ? "Demo fallback" : "Live mode",
-    state.demoMode || !state.apiAvailable ? "flask-conical" : "activity",
+    shouldUseDemoMode ? "demo" : "live",
+    shouldUseDemoMode ? "Demo fallback" : "Live mode",
+    shouldUseDemoMode ? "flask-conical" : "activity",
   );
 }
 
 function setPill(element, variant, text, icon) {
+  if (!element) return;
   element.className = `status-pill is-${variant}`;
   element.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>${escapeHtml(text)}`;
 }
 
 function setButtonLoading(button, isLoading) {
+  if (!button) return;
   button.disabled = isLoading;
   button.classList.toggle("is-loading", isLoading);
 }

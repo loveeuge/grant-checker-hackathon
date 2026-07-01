@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GrantReady Admin | API key</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">GR</div>
+          <div>
+            <p class="eyebrow">지원사업 체크메이트</p>
+            <h1>GrantReady Admin</h1>
+          </div>
+        </div>
+        <div class="status-strip" aria-label="서비스 상태">
+          <span id="api-status-pill" class="status-pill is-checking">
+            <i data-lucide="radio-tower" aria-hidden="true"></i>
+            API 확인 중
+          </span>
+          <span id="key-status-pill" class="status-pill is-muted">
+            <i data-lucide="key-round" aria-hidden="true"></i>
+            Key 상태 확인 중
+          </span>
+          <span id="mode-pill" class="status-pill is-live">
+            <i data-lucide="activity" aria-hidden="true"></i>
+            Live mode
+          </span>
+        </div>
+      </header>
+
+      <main class="workspace admin-workspace">
+        <section class="intro-band admin-intro" aria-labelledby="admin-page-title">
+          <div>
+            <p class="eyebrow">Admin</p>
+            <h2 id="admin-page-title">API key는 관리자 화면에서만 등록합니다</h2>
+          </div>
+          <p>
+            Key는 서버 메모리에만 보관되고, 브라우저 저장소나 Git 저장소에는 남기지 않습니다.
+          </p>
+        </section>
+
+        <div id="notice-banner" class="notice-banner hidden" role="status"></div>
+
+        <section class="panel admin-panel" aria-labelledby="admin-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker">OpenAI</p>
+              <h2 id="admin-title">관리자 API key</h2>
+            </div>
+            <div class="action-row">
+              <a class="button ghost" href="./">
+                <i data-lucide="arrow-left" aria-hidden="true"></i>
+                분석 화면
+              </a>
+              <button id="refresh-status-button" class="icon-button" type="button" aria-label="API 상태 새로고침" title="API 상태 새로고침">
+                <i data-lucide="refresh-cw" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <div class="status-card">
+              <span class="status-label">서버 연결</span>
+              <strong id="server-status-text">확인 중</strong>
+              <span id="server-status-detail">/api/admin/status 응답을 기다리고 있습니다.</span>
+            </div>
+            <div class="status-card">
+              <span class="status-label">API key</span>
+              <strong id="admin-key-status-text">확인 중</strong>
+              <span id="admin-key-status-detail">브라우저에는 저장하지 않고 서버 상태만 확인합니다.</span>
+            </div>
+            <form id="admin-key-form" class="admin-form" autocomplete="off">
+              <label for="api-key-input">새 API key 등록</label>
+              <div class="field-row">
+                <input id="api-key-input" name="apiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+                <input
+                  id="admin-token-input"
+                  name="adminToken"
+                  type="password"
+                  placeholder="관리자 토큰"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button id="save-key-button" class="button secondary" type="submit">
+                  <i data-lucide="shield-check" aria-hidden="true"></i>
+                  서버에 저장
+                </button>
+              </div>
+              <p id="admin-form-note" class="form-note" role="status">입력값은 브라우저 저장소에 남기지 않습니다.</p>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

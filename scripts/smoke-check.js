@@ -3,6 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeApplication } from '../src/analyzer.js';
+import {
+  extractNoticeTextFromUpload,
+  extractNoticeTextFromUrl,
+  extractPreparedDocumentsFromUploads,
+  extractTeamTextFromUpload
+} from '../src/notice-importer.js';
 import { normalizeSamplePayload } from '../src/sample-normalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,5 +31,59 @@ assert.ok(Array.isArray(result.requiredDocuments));
 assert.ok(Array.isArray(result.missingDocuments));
 assert.ok(Array.isArray(result.finalChecklist));
 assert.ok(result.missingDocuments.length >= 1);
+
+const importedText = await extractNoticeTextFromUpload({
+  buffer: Buffer.from('테스트 공고문\n제출서류: 사업계획서, 개인정보 동의서', 'utf8'),
+  originalname: 'notice.txt',
+  mimetype: 'text/plain'
+});
+
+assert.equal(importedText.ok, true);
+assert.ok(importedText.text.includes('테스트 공고문'));
+
+await assert.rejects(
+  () =>
+    extractNoticeTextFromUpload({
+      buffer: Buffer.from('fake-image-bytes', 'utf8'),
+      originalname: 'notice-photo.png',
+      mimetype: 'image/png'
+    }),
+  /OpenAI API key/
+);
+
+const importedTeam = await extractTeamTextFromUpload({
+  buffer: Buffer.from('회사소개서\n팀명: 체크메이트 랩스\n핵심기술: AI 문서 분석', 'utf8'),
+  originalname: 'team.txt',
+  mimetype: 'text/plain'
+});
+
+assert.equal(importedTeam.ok, true);
+assert.ok(importedTeam.text.includes('체크메이트 랩스'));
+
+const importedPreparedDocuments = await extractPreparedDocumentsFromUploads([
+  {
+    buffer: Buffer.from('사업계획서 초안\n시장 분석과 예산 계획 포함', 'utf8'),
+    originalname: 'business-plan.txt',
+    mimetype: 'text/plain'
+  },
+  {
+    buffer: Buffer.from('개인정보 수집 동의서 준비 예정', 'utf8'),
+    originalname: 'privacy-consent.md',
+    mimetype: 'text/markdown'
+  },
+  {
+    buffer: Buffer.from('fake-image-bytes', 'utf8'),
+    originalname: 'registration-photo.jpg',
+    mimetype: 'image/jpeg'
+  }
+]);
+
+assert.equal(importedPreparedDocuments.ok, true);
+assert.equal(importedPreparedDocuments.documents.length, 3);
+assert.equal(importedPreparedDocuments.documents.filter((document) => document.extracted).length, 2);
+assert.ok(importedPreparedDocuments.text.includes('business-plan.txt'));
+assert.ok(importedPreparedDocuments.text.includes('registration-photo.jpg'));
+
+await assert.rejects(() => extractNoticeTextFromUrl('http://localhost:5173'));
 
 console.log('Smoke check passed');

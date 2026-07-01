@@ -21,14 +21,14 @@
             <i data-lucide="radio-tower" aria-hidden="true"></i>
             API 확인 중
           </span>
-          <span id="key-status-pill" class="status-pill is-muted">
-            <i data-lucide="key-round" aria-hidden="true"></i>
-            Key 상태 확인 중
-          </span>
           <span id="mode-pill" class="status-pill is-live">
             <i data-lucide="activity" aria-hidden="true"></i>
             Live mode
           </span>
+          <a class="button ghost topbar-link" href="./admin.html">
+            <i data-lucide="settings" aria-hidden="true"></i>
+            관리자
+          </a>
         </div>
       </header>
 
@@ -41,50 +41,6 @@
           <p>
             지원 가능성, 자격요건, 제출서류 누락, 보완 질문과 최종 체크리스트를 발표용 화면에서 바로 확인하세요.
           </p>
-        </section>
-
-        <section class="panel admin-panel" aria-labelledby="admin-title">
-          <div class="panel-heading">
-            <div>
-              <p class="section-kicker">Admin</p>
-              <h2 id="admin-title">관리자 API key</h2>
-            </div>
-            <button id="refresh-status-button" class="icon-button" type="button" aria-label="API 상태 새로고침" title="API 상태 새로고침">
-              <i data-lucide="refresh-cw" aria-hidden="true"></i>
-            </button>
-          </div>
-
-          <div class="admin-grid">
-            <div class="status-card">
-              <span class="status-label">서버 연결</span>
-              <strong id="server-status-text">확인 중</strong>
-              <span id="server-status-detail">/api/admin/status 응답을 기다리고 있습니다.</span>
-            </div>
-            <div class="status-card">
-              <span class="status-label">API key</span>
-              <strong id="admin-key-status-text">확인 중</strong>
-              <span id="admin-key-status-detail">브라우저에는 저장하지 않고 서버 상태만 확인합니다.</span>
-            </div>
-            <form id="admin-key-form" class="admin-form" autocomplete="off">
-              <label for="api-key-input">새 API key 등록</label>
-              <div class="field-row">
-                <input id="api-key-input" name="apiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
-                <input
-                  id="admin-token-input"
-                  name="adminToken"
-                  type="password"
-                  placeholder="관리자 토큰"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <button id="save-key-button" class="button secondary" type="submit">
-                  <i data-lucide="shield-check" aria-hidden="true"></i>
-                  서버에 저장
-                </button>
-              </div>
-              <p id="admin-form-note" class="form-note" role="status">입력값은 브라우저 저장소에 남기지 않습니다.</p>
-            </form>
-          </div>
         </section>
 
         <div id="notice-banner" class="notice-banner hidden" role="status"></div>
@@ -113,6 +69,23 @@
                 <strong>공고문</strong>
                 <small>지원대상, 제외요건, 제출서류, 평가항목을 포함해 주세요.</small>
               </span>
+              <div class="notice-importer">
+                <div class="import-row">
+                  <input id="notice-file-input" type="file" accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.html,.htm,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*,image/jpeg,image/png,image/webp,image/gif" />
+                  <button id="notice-file-button" class="button ghost" type="button">
+                    <i data-lucide="file-up" aria-hidden="true"></i>
+                    파일 불러오기
+                  </button>
+                  <div class="url-load-row">
+                    <input id="notice-url-input" type="url" placeholder="공고문 URL" autocomplete="off" spellcheck="false" />
+                    <button id="notice-url-button" class="button ghost" type="button">
+                      <i data-lucide="link" aria-hidden="true"></i>
+                      URL 불러오기
+                    </button>
+                  </div>
+                </div>
+                <p id="notice-import-note" class="form-note" role="status">PDF, DOCX, PPTX, TXT, JPG, PNG, URL을 불러오면 공고문 칸에 자동 입력됩니다. 사진 추출은 API key 등록 후 작동합니다.</p>
+              </div>
               <textarea id="grant-notice" placeholder="예: 2026년 초기창업패키지 모집 공고..."></textarea>
             </label>
 
@@ -121,6 +94,16 @@
                 <strong>팀 소개</strong>
                 <small>사업자 상태, 업력, 지역, 핵심 기술, 매출/고용 현황을 적어 주세요.</small>
               </span>
+              <div class="team-importer">
+                <div class="import-row">
+                  <input id="team-file-input" type="file" accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.html,.htm,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*,image/jpeg,image/png,image/webp,image/gif" />
+                  <button id="team-file-button" class="button ghost" type="button">
+                    <i data-lucide="presentation" aria-hidden="true"></i>
+                    회사소개서 불러오기
+                  </button>
+                </div>
+                <p id="team-import-note" class="form-note" role="status">IR, 회사소개서, 팀 소개 파일이나 사진을 불러오면 팀 소개 칸에 자동 입력됩니다. 사진 추출은 API key 등록 후 작동합니다.</p>
+              </div>
               <textarea id="team-intro" placeholder="예: 서울 소재 예비창업팀으로 AI 문서 자동화 서비스를 준비 중..."></textarea>
             </label>
 
@@ -129,6 +112,16 @@
                 <strong>준비 서류</strong>
                 <small>이미 확보한 서류와 발급 예정 서류를 줄 단위로 넣으면 좋습니다.</small>
               </span>
+              <div class="documents-importer">
+                <div class="import-row">
+                  <input id="documents-file-input" type="file" multiple accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.html,.htm,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*,image/jpeg,image/png,image/webp,image/gif" />
+                  <button id="documents-file-button" class="button ghost" type="button">
+                    <i data-lucide="folder-up" aria-hidden="true"></i>
+                    준비서류 첨부
+                  </button>
+                </div>
+                <p id="documents-import-note" class="form-note" role="status">여러 파일과 사진을 첨부하면 파일명과 추출 내용을 준비서류 목록으로 정리합니다. 사진 추출은 API key 등록 후 작동합니다.</p>
+              </div>
               <textarea id="prepared-documents" placeholder="예: 사업계획서 초안, 대표자 신분증, 개인정보 수집 동의서..."></textarea>
             </label>
           </div>

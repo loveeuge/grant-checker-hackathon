@@ -1,9 +1,17 @@
 import 'dotenv/config';
 import express from 'express';
 import fs from 'node:fs/promises';
+import multer from 'multer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeApplication } from './src/analyzer.js';
+import {
+  extractNoticeTextFromUpload,
+  extractNoticeTextFromUrl,
+  extractPreparedDocumentsFromUploads,
+  extractTeamTextFromUpload,
+  isUserInputError
+} from './src/notice-importer.js';
 import { normalizeSamplePayload } from './src/sample-normalizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,11 +20,34 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 5173);
 const model = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const visionModel = process.env.OPENAI_VISION_MODEL || model;
+const singleUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 12 * 1024 * 1024,
+    files: 1
+  }
+});
+const documentsUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 12 * 1024 * 1024,
+    files: 12
+  }
+});
 
 let runtimeApiKey = process.env.OPENAI_API_KEY || '';
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/admin', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/admin/', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 function requireAdmin(req, res, next) {
   const configuredToken = process.env.ADMIN_TOKEN;
@@ -34,7 +65,7 @@ function requireAdmin(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, hasKey: Boolean(runtimeApiKey), model });
+  res.json({ ok: true, hasKey: Boolean(runtimeApiKey), model, visionModel });
 });
 
 app.get('/api/admin/status', (_req, res) => {
@@ -46,7 +77,8 @@ app.get('/api/admin/status', (_req, res) => {
         ? 'environment'
         : 'runtime-admin'
       : 'not-configured',
-    model
+    model,
+    visionModel
   });
 });
 
@@ -88,6 +120,42 @@ app.get('/api/sample', async (_req, res) => {
   res.json(normalizeSamplePayload(sample));
 });
 
+app.post('/api/import/notice/file', singleUpload.single('noticeFile'), async (req, res) => {
+  try {
+    const result = await extractNoticeTextFromUpload(req.file, openAiImportOptions());
+    res.json(result);
+  } catch (error) {
+    sendImportError(res, error);
+  }
+});
+
+app.post('/api/import/notice/url', async (req, res) => {
+  try {
+    const result = await extractNoticeTextFromUrl(req.body?.url, openAiImportOptions());
+    res.json(result);
+  } catch (error) {
+    sendImportError(res, error);
+  }
+});
+
+app.post('/api/import/team/file', singleUpload.single('teamFile'), async (req, res) => {
+  try {
+    const result = await extractTeamTextFromUpload(req.file, openAiImportOptions());
+    res.json(result);
+  } catch (error) {
+    sendImportError(res, error, '팀 소개 파일을 불러오는 중 오류가 발생했습니다.');
+  }
+});
+
+app.post('/api/import/documents/files', documentsUpload.array('documentFiles', 12), async (req, res) => {
+  try {
+    const result = await extractPreparedDocumentsFromUploads(req.files, openAiImportOptions());
+    res.json(result);
+  } catch (error) {
+    sendImportError(res, error, '준비서류 파일을 불러오는 중 오류가 발생했습니다.');
+  }
+});
+
 app.post('/api/analyze', async (req, res) => {
   try {
     const noticeText = String(req.body?.noticeText || '').trim();
@@ -122,6 +190,33 @@ app.post('/api/analyze', async (req, res) => {
 app.use((_req, res) => {
   res.status(404).json({ ok: false, error: 'Not found' });
 });
+
+app.use((error, _req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    return res.status(400).json({ ok: false, error: '파일은 각 12MB 이하로 업로드해 주세요. 준비서류는 한 번에 12개까지 가능합니다.' });
+  }
+
+  next(error);
+});
+
+function openAiImportOptions() {
+  return {
+    apiKey: runtimeApiKey,
+    model: visionModel
+  };
+}
+
+function sendImportError(res, error, fallbackMessage = '공고문을 불러오는 중 오류가 발생했습니다.') {
+  const status = isUserInputError(error) ? 400 : 500;
+  if (status === 500) {
+    console.error('[document-import:error]', error?.message || error);
+  }
+
+  res.status(status).json({
+    ok: false,
+    error: isUserInputError(error) ? error.message : fallbackMessage
+  });
+}
 
 app.listen(port, () => {
   console.log(`GrantReady running at http://localhost:${port}`);
