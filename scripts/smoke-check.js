@@ -22,6 +22,7 @@ const __dirname = path.dirname(__filename);
 const root = path.join(__dirname, '..');
 const sample = normalizeSamplePayload(JSON.parse(await fs.readFile(path.join(root, 'data', 'sample.json'), 'utf8')));
 const indexHtml = await fs.readFile(path.join(root, 'public', 'index.html'), 'utf8');
+const appJs = await fs.readFile(path.join(root, 'public', 'app.js'), 'utf8');
 const envExample = await fs.readFile(path.join(root, '.env.example'), 'utf8');
 
 assert.ok(indexHtml.includes('id="requirements-panel"'));
@@ -29,6 +30,16 @@ assert.ok(indexHtml.includes('id="prepared-documents" hidden'));
 assert.ok(!indexHtml.includes('id="documents-file-button"'));
 assert.ok(!indexHtml.includes('준비서류 첨부'));
 assert.ok(!indexHtml.includes('href="./admin.html"'));
+assert.ok(appJs.includes('필요서류</th>'));
+assert.ok(appJs.includes('왜 필요한가</th>'));
+assert.ok(appJs.includes('오늘 해야 할 일 TOP 3'));
+assert.ok(appJs.includes('첨부서류별 검토 결과'));
+assert.ok(appJs.includes('서류 준비도'));
+assert.ok(appJs.includes('선정 가능성 신호'));
+assert.ok(appJs.includes('강점'));
+assert.ok(appJs.includes('약점'));
+assert.ok(!appJs.includes('선정 확정'));
+assert.ok(!appJs.includes('탈락 확정'));
 assert.ok(envExample.includes('OPENAI_MODEL=gpt-5.5-pro'));
 assert.ok(envExample.includes('OPENAI_VISION_MODEL=gpt-5.5-pro'));
 

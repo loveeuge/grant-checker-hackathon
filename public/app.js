@@ -566,7 +566,23 @@ function renderRequirements() {
     return;
   }
 
-  els.requirementsList.innerHTML = state.requirements.map(renderRequirementRow).join("");
+  els.requirementsList.innerHTML = `
+    <div class="requirement-table-wrap">
+      <table class="requirement-table">
+        <thead>
+          <tr>
+            <th>필요서류</th>
+            <th>왜 필요한가</th>
+            <th>상태</th>
+            <th>첨부</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${state.requirements.map(renderRequirementRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
   renderIcons();
 }
 
@@ -575,23 +591,25 @@ function renderRequirementRow(document) {
   const status = upload ? (upload.extractedCount > 0 ? "첨부 확인" : "첨부됨") : "미첨부";
   const statusClass = upload ? "status-pass" : "status-unknown";
   const fileInputId = `requirement-file-${escapeAttribute(document.id)}`;
+  const reason = document.reason || document.evidence || "공고 기준 확인이 필요합니다.";
+  const uploadText = upload ? `${upload.fileCount}개 파일 · 텍스트 추출 ${upload.extractedCount}개` : "파일 첨부";
 
   return `
-    <article class="requirement-row">
-      <div class="requirement-main">
-        <span class="table-status ${statusClass}">${escapeHtml(status)}</span>
-        <h4>${escapeHtml(document.name)}</h4>
-        <p>${escapeHtml(document.reason || document.evidence || "공고 기준 확인이 필요합니다.")}</p>
-        ${upload ? `<small>${escapeHtml(upload.fileCount)}개 파일 첨부 · 텍스트 추출 ${escapeHtml(upload.extractedCount)}개</small>` : ""}
-      </div>
-      <div class="requirement-actions">
+    <tr>
+      <td>
+        <strong>${escapeHtml(document.name)}</strong>
+        ${document.requiredLevel ? `<small>${escapeHtml(document.requiredLevel)}</small>` : ""}
+      </td>
+      <td>${escapeHtml(reason)}</td>
+      <td><span class="table-status ${statusClass}">${escapeHtml(status)}</span></td>
+      <td class="requirement-actions">
         <input id="${fileInputId}" data-requirement-file="${escapeAttribute(document.id)}" type="file" multiple accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.csv,.json,.html,.htm,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/*,image/jpeg,image/png,image/webp,image/gif" />
         <button class="button ghost" type="button" data-requirement-attach="${escapeAttribute(document.id)}">
           <i data-lucide="paperclip" aria-hidden="true"></i>
-          첨부
+          ${escapeHtml(uploadText)}
         </button>
-      </div>
-    </article>
+      </td>
+    </tr>
   `;
 }
 
@@ -1305,60 +1323,210 @@ function renderResults(result) {
     : [{ item: "제출서류", status: "unknown", evidence: "응답에 누락표가 없습니다.", action: "필수 제출서류 목록을 응답에 포함하세요." }];
   const questions = result.questions.length ? result.questions : [{ text: "추가 보완 질문이 응답에 포함되지 않았습니다." }];
   const checklist = result.checklist.length ? result.checklist : [{ title: "최종 확인", text: "제출 전 공고문 원문과 접수 화면 기준으로 다시 확인하세요." }];
+  const overview = buildResultOverview(result, eligibilityRows, documentRows, questions, checklist, score);
 
   els.resultsContent.innerHTML = `
-    <div class="result-layout">
-      <div class="result-column">
-        <section class="result-section" aria-labelledby="summary-heading">
-          <div class="result-section-header">
-            <h3 id="summary-heading">지원 가능성 요약</h3>
-            <span class="section-count">${result.demo ? "Demo" : "Live"}</span>
+    <div class="result-stack">
+      <section class="result-section" aria-labelledby="final-result-heading">
+        <div class="result-section-header">
+          <h3 id="final-result-heading">최종 결과</h3>
+          <span class="section-count">${result.demo ? "Demo" : "Live"}</span>
+        </div>
+        <div class="result-section-body">
+          <div class="result-metrics" aria-label="최종 결과 요약">
+            ${renderMetricCard("자격요건", overview.eligibilityLabel, overview.eligibilityDetail)}
+            ${renderMetricCard("서류 준비도", overview.documentReadiness, overview.documentDetail)}
+            ${renderMetricCard("선정 가능성 신호", overview.selectionSignal, overview.selectionDetail)}
           </div>
-          <div class="result-section-body">
-            <div class="summary-card">
-              <div class="summary-topline">
-                <span class="summary-verdict">${escapeHtml(result.summary.verdict)}</span>
-                <h4 class="summary-title">${escapeHtml(result.summary.title)}</h4>
-                <p class="summary-copy">${escapeHtml(result.summary.body)}</p>
-              </div>
-              <div class="summary-score">
-                <div class="score-ring" style="--score-angle: ${score * 3.6}deg">${score}<span>%</span></div>
-                <div class="score-copy">
-                  <strong>검토 점수</strong>
-                  <span>신뢰도: ${escapeHtml(String(result.summary.confidence || "중간"))}</span>
-                </div>
-              </div>
-              <div class="summary-meta">
-                <span class="meta-chip">자격 ${countByStatus(eligibilityRows, "pass")}/${eligibilityRows.length} 충족</span>
-                <span class="meta-chip">누락 서류 ${countByStatus(documentRows, "missing") + countByStatus(documentRows, "fail")}건</span>
-              </div>
-              ${
-                result.summary.rationale
-                  ? `<p class="summary-copy">${escapeHtml(result.summary.rationale)}</p>`
-                  : ""
-              }
-              ${
-                result.demo && result.fallbackReason
-                  ? `<div class="fallback-note">Fallback reason: ${escapeHtml(result.fallbackReason)}</div>`
-                  : ""
-              }
+          <div class="summary-card">
+            <div class="summary-topline">
+              <span class="summary-verdict">${escapeHtml(overview.safeVerdict)}</span>
+              <h4 class="summary-title">${escapeHtml(result.summary.title)}</h4>
+              <p class="summary-copy">${escapeHtml(result.summary.body)}</p>
             </div>
+            ${
+              result.summary.rationale
+                ? `<p class="summary-copy">${escapeHtml(result.summary.rationale)}</p>`
+                : ""
+            }
+            ${
+              result.demo && result.fallbackReason
+                ? `<div class="fallback-note">Fallback reason: ${escapeHtml(result.fallbackReason)}</div>`
+                : ""
+            }
           </div>
-        </section>
+        </div>
+      </section>
 
-        ${renderListSection("questions-heading", "보완 질문", questions, "message-square-warning")}
-        ${renderChecklistSection("checklist-heading", "최종 체크리스트", checklist)}
-      </div>
+      <div class="result-layout">
+        <div class="result-column">
+          ${renderTopActionsSection("top-actions-heading", "오늘 해야 할 일 TOP 3", overview.topActions)}
+          ${renderTableSection("documents-heading", "첨부서류별 검토 결과", documentRows, ["첨부서류", "상태", "공고 기준 확인", "보완 조치"])}
+          ${renderListSection("questions-heading", "보완하면 좋아지는 점", questions, "message-square-warning")}
+        </div>
 
-      <div class="result-column">
-        ${renderTableSection("eligibility-heading", "자격요건 체크표", eligibilityRows, ["항목", "상태", "근거", "다음 조치"])}
-        ${renderTableSection("documents-heading", "제출서류 누락표", documentRows, ["서류", "상태", "현재 확인", "보완 조치"])}
+        <div class="result-column">
+          <div class="insight-grid">
+            ${renderInsightSection("strengths-heading", "강점", overview.strengths, "circle-check")}
+            ${renderInsightSection("weaknesses-heading", "약점", overview.weaknesses, "triangle-alert")}
+          </div>
+          ${renderTableSection("eligibility-heading", "자격요건 상세", eligibilityRows, ["항목", "상태", "근거", "다음 조치"])}
+        </div>
       </div>
     </div>
   `;
 
   els.resultTimestamp.textContent = `${new Date().toLocaleString("ko-KR")} 분석`;
   renderIcons();
+}
+
+function buildResultOverview(result, eligibilityRows, documentRows, questions, checklist, score) {
+  const failEligibility = countByStatus(eligibilityRows, "fail");
+  const passEligibility = countByStatus(eligibilityRows, "pass");
+  const warnEligibility = countByStatus(eligibilityRows, "warn") + countByStatus(eligibilityRows, "unknown");
+  const preparedDocuments = countByStatus(documentRows, "pass");
+  const missingDocuments = countByStatus(documentRows, "missing") + countByStatus(documentRows, "fail");
+  const totalDocuments = documentRows.length;
+  const eligibilityLabel = failEligibility
+    ? "부적합 가능"
+    : passEligibility >= Math.max(1, Math.ceil(eligibilityRows.length * 0.5))
+      ? "적합 가능"
+      : "확인 필요";
+  const selectionSignal = buildSelectionSignal(score, failEligibility, warnEligibility, missingDocuments, totalDocuments);
+
+  return {
+    eligibilityLabel,
+    eligibilityDetail: `${eligibilityRows.length}개 요건 중 ${passEligibility}개는 긍정 신호, ${warnEligibility}개는 추가 확인 필요`,
+    documentReadiness: `${totalDocuments}개 중 ${preparedDocuments}개 준비`,
+    documentDetail: missingDocuments ? `${missingDocuments}개 서류는 미첨부 또는 누락 가능` : "첨부 기준으로 큰 누락 신호는 낮음",
+    selectionSignal,
+    selectionDetail: "심사 결과를 단정하지 않고 공고 기준과 현재 자료의 긍정/보완 신호만 표시",
+    safeVerdict: softenResultVerdict(result.summary.verdict || selectionSignal),
+    strengths: buildStrengths(result, eligibilityRows, documentRows),
+    weaknesses: buildWeaknesses(eligibilityRows, documentRows),
+    topActions: buildTopActions(documentRows, questions, checklist),
+  };
+}
+
+function buildSelectionSignal(score, failEligibility, warnEligibility, missingDocuments, totalDocuments) {
+  if (failEligibility || score < 55) return "낮음";
+  if (missingDocuments > Math.max(1, Math.floor(totalDocuments / 2)) || warnEligibility > 2) return "보완 필요";
+  if (score >= 70 && missingDocuments <= 1) return "중간 이상";
+  return "보완 필요";
+}
+
+function softenResultVerdict(verdict) {
+  const text = String(verdict || "검토 필요");
+  return text
+    .replace(/합격|선정\s*확정/g, "선정 가능성 신호")
+    .replace(/탈락\s*확정|탈락/g, "부적합 가능")
+    .replace(/불합격/g, "부적합 가능");
+}
+
+function buildStrengths(result, eligibilityRows, documentRows) {
+  const rows = [
+    ...eligibilityRows
+      .filter((row) => normalizeStatus(row.status) === "pass")
+      .map((row) => `${row.item}: ${row.evidence}`),
+    ...documentRows
+      .filter((row) => normalizeStatus(row.status) === "pass")
+      .map((row) => `${row.item}: 첨부 또는 준비 신호가 확인됨`),
+  ];
+
+  if (rows.length) return rows.slice(0, 3);
+  return [result.summary.body || "회사소개와 공고 기준의 연결점을 더 구체화하면 강점이 선명해집니다."];
+}
+
+function buildWeaknesses(eligibilityRows, documentRows) {
+  const rows = [
+    ...documentRows
+      .filter((row) => ["missing", "fail", "warn", "unknown"].includes(normalizeStatus(row.status)))
+      .map((row) => `${row.item}: ${row.action || row.evidence}`),
+    ...eligibilityRows
+      .filter((row) => ["fail", "warn", "unknown"].includes(normalizeStatus(row.status)))
+      .map((row) => `${row.item}: ${row.action || row.evidence}`),
+  ];
+
+  return rows.length ? rows.slice(0, 4) : ["현재 자료 기준으로 큰 약점은 적지만, 공고 원문과 최신 양식은 최종 확인이 필요합니다."];
+}
+
+function buildTopActions(documentRows, questions, checklist) {
+  const documentActions = documentRows
+    .filter((row) => ["missing", "fail", "warn", "unknown"].includes(normalizeStatus(row.status)))
+    .map((row) => ({
+      title: row.item,
+      text: row.action || "필수 제출 여부와 발급 가능 여부를 확인하세요.",
+    }));
+  const questionActions = questions.map((item) => ({
+    title: item.title || "보완 질문",
+    text: item.text,
+  }));
+  const checklistActions = checklist.map((item) => ({
+    title: item.title || "최종 확인",
+    text: item.text,
+  }));
+
+  return [...documentActions, ...questionActions, ...checklistActions].filter((item) => item.text).slice(0, 3);
+}
+
+function renderMetricCard(label, value, detail) {
+  return `
+    <article class="result-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <p>${escapeHtml(detail)}</p>
+    </article>
+  `;
+}
+
+function renderTopActionsSection(id, title, items) {
+  return `
+    <section class="result-section" aria-labelledby="${id}">
+      <div class="result-section-header">
+        <h3 id="${id}">${title}</h3>
+        <span class="section-count">${items.length}개</span>
+      </div>
+      <div class="result-section-body">
+        <ol class="top-action-list">
+          ${items
+            .map(
+              (item) => `
+                <li>
+                  <strong>${escapeHtml(item.title || "오늘 할 일")}</strong>
+                  <p>${escapeHtml(item.text)}</p>
+                </li>
+              `,
+            )
+            .join("")}
+        </ol>
+      </div>
+    </section>
+  `;
+}
+
+function renderInsightSection(id, title, items, iconName) {
+  return `
+    <section class="result-section" aria-labelledby="${id}">
+      <div class="result-section-header">
+        <h3 id="${id}">${title}</h3>
+        <span class="section-count">${items.length}개</span>
+      </div>
+      <div class="result-section-body">
+        <ul class="insight-list">
+          ${items
+            .map(
+              (item) => `
+                <li>
+                  <i data-lucide="${iconName}" aria-hidden="true"></i>
+                  <p>${escapeHtml(item)}</p>
+                </li>
+              `,
+            )
+            .join("")}
+        </ul>
+      </div>
+    </section>
+  `;
 }
 
 function renderTableSection(id, title, rows, headers) {
@@ -1446,10 +1614,10 @@ function renderChecklistSection(id, title, items) {
 function renderStatus(status) {
   const normalized = normalizeStatus(status);
   const config = {
-    pass: ["status-pass", "circle-check", "충족"],
-    warn: ["status-warn", "triangle-alert", "보완"],
-    fail: ["status-fail", "circle-x", "미충족"],
-    missing: ["status-missing", "file-x-2", "누락"],
+    pass: ["status-pass", "circle-check", "가능/준비"],
+    warn: ["status-warn", "triangle-alert", "보완 필요"],
+    fail: ["status-fail", "circle-x", "부적합 가능"],
+    missing: ["status-missing", "file-x-2", "누락 가능"],
     unknown: ["status-unknown", "circle-help", "확인 필요"],
     info: ["status-info", "info", "참고"],
   }[normalized] || ["status-unknown", "circle-help", "확인 필요"];

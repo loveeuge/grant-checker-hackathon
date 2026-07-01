@@ -474,6 +474,54 @@ h3 {
   height: 20px;
 }
 
+.requirement-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.requirement-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.requirement-table th {
+  padding: 11px 12px;
+  color: var(--muted-strong);
+  background: #f3f6fa;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.requirement-table td {
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.requirement-table td:first-child {
+  color: var(--text);
+}
+
+.requirement-table strong,
+.requirement-table small {
+  display: block;
+}
+
+.requirement-table small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .requirement-row,
 .signal-row {
   display: grid;
@@ -902,6 +950,11 @@ a.button {
   line-height: 1.6;
 }
 
+.result-stack {
+  display: grid;
+  gap: 18px;
+}
+
 .result-layout {
   display: grid;
   grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
@@ -938,6 +991,49 @@ a.button {
 
 .result-section-body {
   padding: 16px;
+}
+
+.result-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.result-metric {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.result-metric span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.result-metric strong {
+  display: block;
+  color: var(--primary-strong);
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.result-metric p {
+  margin: 8px 0 0;
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.insight-grid {
+  display: grid;
+  gap: 18px;
 }
 
 .summary-card {
@@ -1092,7 +1188,9 @@ a.button {
 }
 
 .question-list,
-.check-list {
+.check-list,
+.top-action-list,
+.insight-list {
   display: grid;
   gap: 10px;
   margin: 0;
@@ -1101,7 +1199,10 @@ a.button {
 }
 
 .question-item,
-.check-item {
+.check-item,
+.top-action-list li,
+.insight-list li {
+  display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 12px;
@@ -1111,21 +1212,48 @@ a.button {
 }
 
 .question-item svg,
-.check-item svg {
+.check-item svg,
+.insight-list svg {
+  flex: 0 0 auto;
   margin-top: 2px;
   color: var(--primary);
 }
 
 .question-item p,
-.check-item p {
+.check-item p,
+.top-action-list p,
+.insight-list p {
   margin: 0;
   line-height: 1.55;
 }
 
-.check-item strong {
+.check-item strong,
+.top-action-list strong {
   display: block;
   margin-bottom: 3px;
   color: var(--text);
+}
+
+.top-action-list {
+  counter-reset: action;
+}
+
+.top-action-list li {
+  counter-increment: action;
+}
+
+.top-action-list li::before {
+  content: counter(action);
+  display: grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--surface);
+  background: var(--primary);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .section-count {
@@ -1163,6 +1291,7 @@ a.button {
   .announcement-search-form,
   .announcement-results,
   .requirements-grid,
+  .result-metrics,
   .result-layout {
     grid-template-columns: 1fr;
   }
